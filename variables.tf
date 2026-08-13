@@ -25,7 +25,10 @@ variable "create_access_key" {
 variable "create_login_profile" {
   description = "マネジメントコンソールへのサインインを許可するか (ログインプロファイルを作成する)"
   type        = bool
-  default     = true
+
+  # 既定は false。作成には run ロールに iam:*LoginProfile が必要で、
+  # 現状は付与していない。コンソールのパスワードは管理者が手動で設定する。
+  default = false
 }
 
 variable "login_profile_password_length" {

@@ -76,7 +76,7 @@ AWS CLI とマネジメントコンソールから読み取り操作をするた
 | 変数 | 既定値 | 説明 |
 | --- | --- | --- |
 | `readonly_user_name` | `readonly` | ユーザー名 |
-| `create_login_profile` | `true` | マネジメントコンソールへのサインインを許可するか |
+| `create_login_profile` | `false` | コンソールのログインプロファイルを Terraform で作るか |
 | `login_profile_password_length` | `20` | Terraform が生成する初期パスワードの長さ |
 | `login_profile_pgp_key` | `null` | 初期パスワードを暗号化する PGP 公開鍵 (base64) / `keybase:<user>` |
 | `create_access_key` | `false` | アクセスキーを Terraform で作るか |
@@ -89,13 +89,18 @@ Lambda の関数コード取得など**データそのものの読み取りも�
 
 ### コンソールへのサインイン
 
-`create_login_profile = true`（既定）でログインプロファイルが作られ、
-マネジメントコンソールにサインインできます。初期パスワードは Terraform が
-生成し、**初回サインイン時に本人が変更する**設定（`password_reset_required`）です。
+コンソールのパスワード（ログインプロファイル）は **Terraform では作りません**
+（`create_login_profile = false`）。Terraform Cloud の run ロール
+`terraform-policy` に `iam:CreateLoginProfile` を付与しておらず、apply が
+`AccessDenied` になるためです。管理者が手動で設定します。
+
+1. IAM コンソールの **Users → `readonly` → Security credentials →
+   Console sign-in → Enable console access**
+2. パスワードを発行し、**「次回サインイン時にパスワードの変更を要求」を有効**にする
+3. サインイン URL と初期パスワードを本人に渡す
 
 ```bash
-terraform output console_signin_url             # https://<account_id>.signin.aws.amazon.com/console
-terraform output -raw readonly_console_password # 初期パスワード
+terraform output console_signin_url   # https://<account_id>.signin.aws.amazon.com/console
 ```
 
 サインイン画面では次を入力します。
@@ -104,11 +109,34 @@ terraform output -raw readonly_console_password # 初期パスワード
 | --- | --- |
 | Account ID (or alias) | `account_id` output の値 |
 | IAM user name | `readonly` |
-| Password | 上で取り出した初期パスワード |
+| Password | 管理者が発行したパスワード |
 
-初期パスワードは既定では **state に平文で保存されます**。避けたい場合は
-`login_profile_pgp_key` に PGP 公開鍵（base64）または `keybase:<username>` を
-指定してください。`readonly_console_password` は空になり、暗号化された値が
+以降のパスワード変更は本人でできます（`allow_self_credential_management = true`
+により `iam:ChangePassword` を許可済み）。
+
+#### Terraform で管理したい場合
+
+run ロールに次を許可したうえで `create_login_profile = true` にします。
+
+```json
+{
+  "Effect": "Allow",
+  "Action": [
+    "iam:CreateLoginProfile",
+    "iam:GetLoginProfile",
+    "iam:UpdateLoginProfile",
+    "iam:DeleteLoginProfile"
+  ],
+  "Resource": "arn:aws:iam::<account_id>:user/readonly"
+}
+```
+
+`Get` がないと作成直後の読み戻しで、`Delete` がないと `false` に戻したときや
+destroy で失敗します。この場合、初期パスワードは
+`terraform output -raw readonly_console_password` で取り出せますが、
+**state に平文で保存されます**。避けたい場合は `login_profile_pgp_key` に
+PGP 公開鍵（base64）または `keybase:<username>` を指定してください。
+`readonly_console_password` は空になり、暗号化された値が
 `readonly_console_password_encrypted` に入ります。
 
 ```bash
@@ -118,9 +146,6 @@ terraform output -raw readonly_console_password_encrypted | base64 -d | gpg -d
 本人がパスワードを変更しても Terraform は差分として扱いません
 （`password_reset_required` などを `ignore_changes` に入れてあります）。
 プロファイルを作り直すとパスワードがリセットされる点に注意してください。
-
-コンソールを使わせない場合は `create_login_profile = false` にします。既に
-作成済みのプロファイルは apply 時に削除され、サインインできなくなります。
 
 ### アクセスキーの発行
 
