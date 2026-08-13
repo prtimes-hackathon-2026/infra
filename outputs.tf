@@ -13,6 +13,73 @@ output "region" {
   value       = data.aws_region.current.region
 }
 
+# ---------------------------------------------------------------------------
+# アプリケーション
+# ---------------------------------------------------------------------------
+
+output "app_url" {
+  description = "アプリケーションの URL (ALB の DNS 名)"
+  value       = "${var.certificate_arn == null ? "http" : "https"}://${aws_lb.app.dns_name}"
+}
+
+output "alb_dns_name" {
+  description = "ALB の DNS 名。独自ドメインを使う場合はここに CNAME / ALIAS を向ける"
+  value       = aws_lb.app.dns_name
+}
+
+output "alb_zone_id" {
+  description = "Route 53 の ALIAS レコード用ホストゾーン ID"
+  value       = aws_lb.app.zone_id
+}
+
+output "ecs_cluster_name" {
+  description = "ECS クラスター名"
+  value       = aws_ecs_cluster.main.name
+}
+
+output "ecs_service_name" {
+  description = "ECS サービス名"
+  value       = aws_ecs_service.app.name
+}
+
+output "log_group_name" {
+  description = "アプリケーションログの CloudWatch Logs グループ"
+  value       = aws_cloudwatch_log_group.app.name
+}
+
+# ---------------------------------------------------------------------------
+# データベース
+# ---------------------------------------------------------------------------
+
+output "app_db_endpoint" {
+  description = "アプリ用 RDS のエンドポイント (host:port)"
+  value       = aws_db_instance.app.endpoint
+}
+
+output "app_db_name" {
+  description = "アプリ用データベース名"
+  value       = aws_db_instance.app.db_name
+}
+
+output "app_db_secret_arn" {
+  description = "アプリ用 RDS のマスターユーザー認証情報が入った Secrets Manager シークレット"
+  value       = aws_db_instance.app.master_user_secret[0].secret_arn
+}
+
+output "stats_db_endpoint" {
+  description = "既存の統計用 RDS のエンドポイント"
+  value       = "${data.aws_db_instance.stats.address}:${data.aws_db_instance.stats.port}"
+}
+
+output "stats_db_secret_arn" {
+  description = "統計用 RDS の接続 URL を入れるシークレット。値は手動で設定する"
+  value       = aws_secretsmanager_secret.stats_db_url.arn
+}
+
+# ---------------------------------------------------------------------------
+# IAM (参照専用ユーザー)
+# ---------------------------------------------------------------------------
+
 output "readonly_user_arn" {
   description = "参照専用 IAM ユーザーの ARN"
   value       = aws_iam_user.readonly.arn

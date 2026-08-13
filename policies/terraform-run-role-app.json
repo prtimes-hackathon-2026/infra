@@ -1,0 +1,141 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "NetworkingRead",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:Describe*",
+        "elasticloadbalancing:Describe*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NetworkingWrite",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateSubnet",
+        "ec2:DeleteSubnet",
+        "ec2:ModifySubnetAttribute",
+        "ec2:CreateRouteTable",
+        "ec2:DeleteRouteTable",
+        "ec2:CreateRoute",
+        "ec2:DeleteRoute",
+        "ec2:ReplaceRoute",
+        "ec2:AssociateRouteTable",
+        "ec2:DisassociateRouteTable",
+        "ec2:CreateSecurityGroup",
+        "ec2:DeleteSecurityGroup",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ec2:RevokeSecurityGroupEgress",
+        "ec2:ModifySecurityGroupRules",
+        "ec2:UpdateSecurityGroupRuleDescriptionsIngress",
+        "ec2:UpdateSecurityGroupRuleDescriptionsEgress",
+        "ec2:CreateTags",
+        "ec2:DeleteTags"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "ap-northeast-1"
+        }
+      }
+    },
+    {
+      "Sid": "LoadBalancerEcsRdsLogs",
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:*",
+        "ecs:*",
+        "rds:*",
+        "logs:*",
+        "application-autoscaling:*"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "ap-northeast-1"
+        }
+      }
+    },
+    {
+      "Sid": "ManageEcsRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:ListRoleTags",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:PutRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:ListInstanceProfilesForRole",
+        "iam:UpdateAssumeRolePolicy"
+      ],
+      "Resource": [
+        "arn:aws:iam::317695556802:role/webapp-*"
+      ]
+    },
+    {
+      "Sid": "PassRolesToEcs",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::317695556802:role/webapp-*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "ecs-tasks.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "ServiceLinkedRoles",
+      "Effect": "Allow",
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "iam:AWSServiceName": [
+            "ecs.amazonaws.com",
+            "elasticloadbalancing.amazonaws.com",
+            "rds.amazonaws.com"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "ManageSecrets",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:DeleteSecret",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:UpdateSecret",
+        "secretsmanager:GetResourcePolicy",
+        "secretsmanager:ListSecretVersionIds",
+        "secretsmanager:TagResource",
+        "secretsmanager:UntagResource"
+      ],
+      "Resource": [
+        "arn:aws:secretsmanager:ap-northeast-1:317695556802:secret:webapp-*",
+        "arn:aws:secretsmanager:ap-northeast-1:317695556802:secret:rds!*"
+      ]
+    },
+    {
+      "Sid": "KmsForEncryptedResources",
+      "Effect": "Allow",
+      "Action": [
+        "kms:DescribeKey",
+        "kms:ListAliases"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
