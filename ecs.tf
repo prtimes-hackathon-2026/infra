@@ -23,18 +23,14 @@ resource "aws_ecs_cluster_capacity_providers" "main" {
 }
 
 locals {
-  # アプリ用 DB は接続情報を個別の環境変数で渡す。パスワードだけは
-  # Secrets Manager から注入するので、DATABASE_URL を組み立てたい場合は
-  # アプリ側で組み立てる。
+  # 変数名は app リポジトリの src/shared/env.ts (zod スキーマ) に合わせている。
+  # 接続 URL の 2 本は必須。SSL は RDS が rds.force_ssl を既定で有効にしている
+  # ため require を明示している (アプリ側の既定値も require)。
   app_environment = merge(
     {
-      DB_HOST = aws_db_instance.app.address
-      DB_PORT = tostring(aws_db_instance.app.port)
-      DB_NAME = var.app_db_name
-      DB_USER = var.app_db_username
-
-      STATS_DB_HOST = data.aws_db_instance.stats.address
-      STATS_DB_PORT = tostring(data.aws_db_instance.stats.port)
+      NODE_ENV           = "production"
+      APP_DATABASE_SSL   = "require"
+      STATS_DATABASE_SSL = "require"
     },
     var.container_environment,
   )
@@ -76,10 +72,8 @@ resource "aws_ecs_task_definition" "app" {
 
       secrets = [
         {
-          # RDS が管理するシークレットは {"username":..,"password":..} の JSON。
-          # 末尾の :password:: で password キーだけを取り出している。
-          name      = "DB_PASSWORD"
-          valueFrom = "${aws_db_instance.app.master_user_secret[0].secret_arn}:password::"
+          name      = "APP_DATABASE_URL"
+          valueFrom = aws_secretsmanager_secret.app_db_url.arn
         },
         {
           name      = "STATS_DATABASE_URL"

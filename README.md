@@ -243,20 +243,37 @@ Terraform で追加しています（`aws_vpc_security_group_ingress_rule.stats_
 
 ### コンテナに渡される接続情報
 
+変数名は app リポジトリの `src/shared/env.ts` の zod スキーマに合わせています。
+
 | 種別 | 変数名 | 中身 |
 | --- | --- | --- |
-| 環境変数 | `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` | アプリ用 RDS |
-| シークレット | `DB_PASSWORD` | アプリ用 RDS のマスターパスワード |
-| 環境変数 | `STATS_DB_HOST` / `STATS_DB_PORT` | 統計 DB |
-| シークレット | `STATS_DATABASE_URL` | 統計 DB の接続 URL（手動設定） |
+| シークレット | `APP_DATABASE_URL` | アプリ用 RDS の接続 URL（Terraform が自動生成） |
+| シークレット | `STATS_DATABASE_URL` | 統計 DB の接続 URL（**手動設定が必要**） |
+| 環境変数 | `APP_DATABASE_SSL` / `STATS_DATABASE_SSL` | `require` |
+| 環境変数 | `NODE_ENV` | `production` |
 
-`DATABASE_URL` の形に組み立てたい場合はアプリ側で組み立ててください（環境変数の
-値としてシークレットを埋め込むことは ECS ではできません）。その他に渡したい変数は
-`container_environment` に map で指定します。
+`APP_DATABASE_POOL_MAX` (既定 10) / `STATS_DATABASE_POOL_MAX` (既定 5) はアプリ側の
+既定値に任せています。上書きしたい変数は `container_environment` に map で渡します。
 
-アプリ用 RDS のパスワードは `manage_master_user_password = true` により RDS 自身が
-生成・ローテーションし、Secrets Manager に入ります。**Git にも Terraform state にも
-平文は残りません。**
+コンテナポートは Dockerfile の `PORT=3000` / `EXPOSE 3000` に、ヘルスチェックパスは
+`/api/health`（DB に触らない liveness チェック）に合わせています。
+
+#### アプリ用 DB のパスワードは Terraform state に入ります
+
+アプリは接続情報を `APP_DATABASE_URL` という**1 本の URL** で受け取ります。ECS は
+シークレットの値を環境変数の一部に埋め込めないため、URL を組み立てるには Terraform 側
+でパスワードの平文を持つ必要があります。
+
+RDS の `manage_master_user_password` は平文を取得できず、さらに自動ローテーションで
+組み立て済みの URL が陳腐化するため使えません。したがって `random_password` で
+40 桁の英数字パスワードを生成し、URL を組み立てて Secrets Manager に入れています。
+**平文が Terraform state に入る**点に注意してください（state は Terraform Cloud 側で
+暗号化・アクセス制御されています）。
+
+state に入れたくない場合は、Terraform 1.11+ の write-only 引数
+（`aws_db_instance.password_wo` / `aws_secretsmanager_secret_version.secret_string_wo`）と
+`ephemeral "random_password"` を組み合わせる方法があります。ローテーション時に
+`*_wo_version` を手で上げる運用になります。
 
 ### 主な変数
 
@@ -264,8 +281,8 @@ Terraform で追加しています（`aws_vpc_security_group_ingress_rule.stats_
 | --- | --- | --- |
 | `container_image` | `ghcr.io/prtimes-hackathon-2026/app:latest` | デプロイするイメージ |
 | `registry_credentials_secret_arn` | `null` | イメージが private の場合に指定（下記） |
-| `container_port` | `8080` | コンテナが listen するポート |
-| `health_check_path` | `/` | ALB のヘルスチェックパス |
+| `container_port` | `3000` | Dockerfile の `EXPOSE 3000` に合わせている |
+| `health_check_path` | `/api/health` | ALB のヘルスチェックパス |
 | `task_architecture` | `X86_64` | arm64 イメージなら `ARM64` |
 | `task_cpu` / `task_memory` | `512` / `1024` | Fargate のサイズ |
 | `desired_count` | `1` | 起動タスク数 |
@@ -396,14 +413,15 @@ run ロール自身の権限は Terraform では管理できません（自分�
         "secretsmanager:DeleteSecret",
         "secretsmanager:DescribeSecret",
         "secretsmanager:UpdateSecret",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:PutSecretValue",
         "secretsmanager:GetResourcePolicy",
         "secretsmanager:ListSecretVersionIds",
         "secretsmanager:TagResource",
         "secretsmanager:UntagResource"
       ],
       "Resource": [
-        "arn:aws:secretsmanager:ap-northeast-1:317695556802:secret:webapp-*",
-        "arn:aws:secretsmanager:ap-northeast-1:317695556802:secret:rds!*"
+        "arn:aws:secretsmanager:ap-northeast-1:317695556802:secret:webapp-*"
       ]
     },
     {
@@ -421,30 +439,22 @@ run ロール自身の権限は Terraform では管理できません（自分�
 `elasticloadbalancing` / `ecs` / `rds` / `logs` はサービス単位のワイルドカードに
 しています（リージョンだけ制限）。扱うリソースが固まったら絞り込んでください。
 
-**2. イメージが匿名で pull できる状態か確認する**
+**2. イメージが pull できる状態か確認する**
 
-`ghcr.io/prtimes-hackathon-2026/app:latest` を既定値にしていますが、**GHCR に push した
-パッケージは既定で private** です。private のままだと ECS が pull できず、タスクが
-`CannotPullContainerError` で起動に失敗します。
+既定値は `ghcr.io/prtimes-hackathon-2026/app:latest` です。`app` リポジトリが public
+なので、GHCR のパッケージも public として公開され、認証なしで pull できます
+（`docker-publish.yml` が main への push で `latest` を発行、`linux/amd64` のみ）。
 
 ```bash
-# 認証なしで manifest が引ければ public
+# 200 なら認証なしで pull できる。403 なら private または未 push
 curl -s -o /dev/null -w '%{http_code}\n' \
   "https://ghcr.io/token?scope=repository:prtimes-hackathon-2026/app:pull&service=ghcr.io"
-# 200 なら public / 403 なら private または未 push
 ```
 
-`403` の場合は次のどちらかで対処します。
-
-- **public にする（おすすめ）**: GitHub の Packages ページ → `app` →
-  Package settings → Change visibility → Public
-- **PAT を使う**: `read:packages` 権限の PAT を
-  `{"username": "<GitHubユーザー名>", "password": "<PAT>"}` の JSON で
-  Secrets Manager に保存し、その ARN を `registry_credentials_secret_arn` に渡す。
-  タスク実行ロールに読み取り権限が自動で付き、`repositoryCredentials` 経由で使われます。
-
-なお、パッケージを public にすると **リポジトリと同じくイメージの中身も誰でも
-pull できる**ようになります。イメージに認証情報などを焼き込んでいないか確認してください。
+`403` になる場合（パッケージを private にした場合など）は、`read:packages` 権限の PAT を
+`{"username": "<GitHubユーザー名>", "password": "<PAT>"}` の JSON で Secrets Manager に
+保存し、その ARN を `registry_credentials_secret_arn` に渡してください。タスク実行ロールに
+読み取り権限が自動で付き、`repositoryCredentials` 経由で pull します。
 
 **3. apply**
 
@@ -455,8 +465,9 @@ terraform apply
 
 **4. 統計 DB の接続 URL をシークレットに入れる**
 
-Terraform は空のシークレットだけを作ります（パスワードを state に残さないため）。
-値は手で入れてください。これが空のままだとタスクが起動に失敗します。
+統計 DB は運営が作ったもので、Terraform 側ではパスワードを知りようがありません。
+シークレットの箱だけ作るので、値は手で入れてください。**値が入っていないと
+`ResourceNotFoundException` でタスクが起動しません。**
 
 ```bash
 terraform output stats_db_secret_arn
@@ -469,12 +480,22 @@ Secrets Manager コンソールでそのシークレットを開き、**プレ�
 postgresql://postgres:<統計DBのパスワード>@prtimes-hackathon-2026summer-db.cvkmyi86uqk4.ap-northeast-1.rds.amazonaws.com:5432/<dbname>
 ```
 
+統計 DB には初期データベース名が設定されていないため、`<dbname>` は pgAdmin などで
+実際の DB 名を確認してください。アプリからは参照しかしないので、専用の読み取り専用
+ユーザー（`.env.example` の例では `stats_reader`）を作って使うのが望ましいです。
+
+アプリ用 DB の `APP_DATABASE_URL` は Terraform が自動で入れるので、手作業は要りません。
+
 **5. 疎通確認**
 
 ```bash
-terraform output app_url          # http://webapp-dev-alb-....ap-northeast-1.elb.amazonaws.com
+terraform output app_url
+curl -i "$(terraform output -raw app_url)/api/health"   # {"status":"ok"}
 curl -i "$(terraform output -raw app_url)"
 ```
+
+`/api/health` は DB に触らないので、DB 接続が壊れていても 200 を返します。DB まで
+確認したい場合はアプリの画面を開くか、`aws logs tail` でエラーを確認してください。
 
 ### 運用
 

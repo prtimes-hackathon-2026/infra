@@ -62,8 +62,8 @@ output "app_db_name" {
 }
 
 output "app_db_secret_arn" {
-  description = "アプリ用 RDS のマスターユーザー認証情報が入った Secrets Manager シークレット"
-  value       = aws_db_instance.app.master_user_secret[0].secret_arn
+  description = "アプリ用 RDS の接続 URL (APP_DATABASE_URL) が入った Secrets Manager シークレット"
+  value       = aws_secretsmanager_secret.app_db_url.arn
 }
 
 output "stats_db_endpoint" {

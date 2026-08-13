@@ -39,8 +39,8 @@ data "aws_iam_policy_document" "task_execution_secrets" {
 
     resources = concat(
       [
+        aws_secretsmanager_secret.app_db_url.arn,
         aws_secretsmanager_secret.stats_db_url.arn,
-        aws_db_instance.app.master_user_secret[0].secret_arn,
       ],
       var.registry_credentials_secret_arn == null ? [] : [var.registry_credentials_secret_arn],
     )

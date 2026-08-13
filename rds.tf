@@ -3,6 +3,19 @@ data "aws_db_instance" "stats" {
   db_instance_identifier = var.stats_db_identifier
 }
 
+# アプリは接続情報を APP_DATABASE_URL という 1 本の URL で受け取る。ECS は
+# シークレットを環境変数の一部に埋め込めないため、URL を組み立てるには
+# Terraform 側でパスワードを持つ必要がある（RDS の manage_master_user_password
+# だと平文を取得できず、自動ローテーションで URL も陳腐化する）。
+#
+# そのため、パスワードは Terraform で生成する。**平文が Terraform state に入る**
+# 点に注意（state は Terraform Cloud 側で暗号化・アクセス制御されている）。
+# URL エンコードを不要にするため記号は使わず、長さで強度を確保している。
+resource "random_password" "app_db" {
+  length  = 40
+  special = false
+}
+
 # アプリ用 RDS。統計 DB と同じプライベートサブネット (1a / 1c) に置く。
 resource "aws_db_subnet_group" "app" {
   name        = "${local.name}-db"
@@ -42,11 +55,8 @@ resource "aws_db_instance" "app" {
 
   db_name  = var.app_db_name
   username = var.app_db_username
+  password = random_password.app_db.result
   port     = 5432
-
-  # パスワードは Terraform で生成せず RDS に管理させる。state にも Git にも
-  # 平文が残らず、値は Secrets Manager のシークレットに入る。
-  manage_master_user_password = true
 
   db_subnet_group_name   = aws_db_subnet_group.app.name
   parameter_group_name   = aws_db_parameter_group.app.name
@@ -74,8 +84,35 @@ resource "aws_db_instance" "app" {
 }
 
 # ---------------------------------------------------------------------------
-# 統計 DB の接続情報
+# 接続情報 (Secrets Manager)
 # ---------------------------------------------------------------------------
+
+# アプリ用 DB は接続 URL を Terraform が組み立てて入れる。
+resource "aws_secretsmanager_secret" "app_db_url" {
+  name        = "${local.name}/app-db-url"
+  description = "APP_DATABASE_URL for ${local.name}"
+
+  # ハッカソン中に作り直すことを想定して、削除後すぐ同名で作れるようにする。
+  recovery_window_in_days = 0
+
+  tags = {
+    Name = "${local.name}-app-db-url"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "app_db_url" {
+  secret_id = aws_secretsmanager_secret.app_db_url.id
+
+  secret_string = format(
+    "postgresql://%s:%s@%s:%d/%s",
+    var.app_db_username,
+    random_password.app_db.result,
+    aws_db_instance.app.address,
+    aws_db_instance.app.port,
+    var.app_db_name,
+  )
+}
+
 # 統計 DB は運営が作ったもので、マスターパスワードが Secrets Manager に
 # 入っていない。空のシークレットだけ Terraform で作り、値（接続 URL）は
 # 手でコンソールに入れる。こうすればパスワードが Git にも state にも載らない。

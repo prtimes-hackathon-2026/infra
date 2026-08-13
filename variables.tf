@@ -64,9 +64,9 @@ variable "registry_credentials_secret_arn" {
 }
 
 variable "container_port" {
-  description = "コンテナが listen するポート"
+  description = "コンテナが listen するポート。app の Dockerfile は PORT=3000 / EXPOSE 3000"
   type        = number
-  default     = 8080
+  default     = 3000
 }
 
 variable "container_environment" {
@@ -105,9 +105,9 @@ variable "desired_count" {
 }
 
 variable "health_check_path" {
-  description = "ALB ターゲットグループのヘルスチェックパス"
+  description = "ALB ターゲットグループのヘルスチェックパス。app の liveness エンドポイント"
   type        = string
-  default     = "/"
+  default     = "/api/health"
 }
 
 variable "container_insights" {
