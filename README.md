@@ -392,9 +392,12 @@ run ロール自身の権限は Terraform では管理できません（自分�
         "iam:CreateOpenIDConnectProvider",
         "iam:DeleteOpenIDConnectProvider",
         "iam:GetOpenIDConnectProvider",
+        "iam:ListOpenIDConnectProviderTags",
         "iam:TagOpenIDConnectProvider",
         "iam:UntagOpenIDConnectProvider",
-        "iam:UpdateOpenIDConnectProviderThumbprint"
+        "iam:UpdateOpenIDConnectProviderThumbprint",
+        "iam:AddClientIDToOpenIDConnectProvider",
+        "iam:RemoveClientIDFromOpenIDConnectProvider"
       ],
       "Resource": "arn:aws:iam::317695556802:oidc-provider/token.actions.githubusercontent.com"
     },
@@ -457,10 +460,20 @@ run ロール自身の権限は Terraform では管理できません（自分�
 しています（リージョンだけ制限）。扱うリソースが固まったら絞り込んでください。
 
 `ManageGithubOidcProvider` は自動デプロイ（後述）用の OIDC プロバイダを Terraform で
-作るためのものです。プロバイダを Terraform で管理しない場合
-（`create_github_oidc_provider = false`）は、代わりに `iam:GetOpenIDConnectProvider` と
-`iam:ListOpenIDConnectProviders`（`Resource` は `*`）だけあれば足ります。
-デプロイ用ロール本体は `webapp-*` に収まるので `ManageEcsRoles` の範囲内です。
+作るためのものです。`ListOpenIDConnectProviderTags` は refresh のたびに呼ばれる
+（`default_tags` を付けているため）ので、無いと apply ではなく plan の時点で
+`AccessDenied` になります。`AddClientID*` / `RemoveClientID*` は `client_id_list` を
+変更したときだけ必要で、`UpdateOpenIDConnectProviderThumbprint` は
+`thumbprint_list` を指定した場合のみ使われます（現状は指定していません）。
+
+プロバイダを Terraform で管理しない場合（`create_github_oidc_provider = false`）は、
+この statement の代わりに `iam:GetOpenIDConnectProvider` と
+`iam:ListOpenIDConnectProviders`（`Resource` は `*`。URL からプロバイダを引くのに
+一覧が要る）だけあれば足ります。
+
+デプロイ用ロール本体は `webapp-dev-github-actions-deploy` で `webapp-*` に収まるため、
+`ManageEcsRoles` の範囲内で追加の権限は要りません。ただし後からロールの
+`description` や `max_session_duration` を変えると `iam:UpdateRole` が必要になります。
 
 **2. イメージが pull できる状態か確認する**
 
