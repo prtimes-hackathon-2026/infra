@@ -10,6 +10,189 @@ variable "environment" {
   default     = "dev"
 }
 
+variable "app_name" {
+  description = "アプリケーション名。作成するリソース名のプレフィックスになる"
+  type        = string
+  default     = "webapp"
+}
+
+variable "vpc_id" {
+  description = "リソースを作成する既存 VPC。統計用 RDS が入っているものを指定する"
+  type        = string
+  default     = "vpc-00a084258f8af45ee"
+}
+
+variable "public_subnets" {
+  description = "アプリ用に作成するパブリックサブネット (AZ => CIDR)。ALB に必要なので 2 AZ 以上にする"
+  type        = map(string)
+
+  default = {
+    "ap-northeast-1a" = "10.0.1.0/24"
+    "ap-northeast-1c" = "10.0.2.0/24"
+  }
+
+  validation {
+    condition     = length(var.public_subnets) >= 2
+    error_message = "ALB は 2 つ以上の AZ のサブネットを必要とするため、2 件以上指定してください。"
+  }
+}
+
+variable "stats_db_identifier" {
+  description = "既存の統計用 RDS の DB インスタンス識別子"
+  type        = string
+  default     = "prtimes-hackathon-2026summer-db"
+}
+
+# ---------------------------------------------------------------------------
+# コンテナ
+# ---------------------------------------------------------------------------
+
+variable "container_image" {
+  description = "デプロイするコンテナイメージ"
+  type        = string
+  default     = "ghcr.io/prtimes-hackathon-2026/app:latest"
+}
+
+variable "registry_credentials_secret_arn" {
+  description = <<-EOT
+    コンテナレジストリが認証を要求する場合に使う Secrets Manager シークレットの ARN。
+    {"username": "<GitHubユーザー名>", "password": "<read:packages 権限の PAT>"} の JSON を入れる。
+    イメージが public なら null のままでよい。
+  EOT
+  type        = string
+  default     = null
+}
+
+variable "container_port" {
+  description = "コンテナが listen するポート。app の Dockerfile は PORT=3000 / EXPOSE 3000"
+  type        = number
+  default     = 3000
+}
+
+variable "container_environment" {
+  description = "コンテナに渡す追加の環境変数"
+  type        = map(string)
+  default     = {}
+}
+
+variable "task_architecture" {
+  description = "コンテナイメージの CPU アーキテクチャ (X86_64 / ARM64)"
+  type        = string
+  default     = "X86_64"
+
+  validation {
+    condition     = contains(["X86_64", "ARM64"], var.task_architecture)
+    error_message = "task_architecture は X86_64 または ARM64 を指定してください。"
+  }
+}
+
+variable "task_cpu" {
+  description = "Fargate タスクの CPU ユニット (256 / 512 / 1024 / ...)"
+  type        = number
+  default     = 512
+}
+
+variable "task_memory" {
+  description = "Fargate タスクのメモリ (MiB)。task_cpu と組み合わせが決まっている"
+  type        = number
+  default     = 1024
+}
+
+variable "desired_count" {
+  description = "常時起動しておくタスク数"
+  type        = number
+  default     = 1
+}
+
+variable "health_check_path" {
+  description = "ALB ターゲットグループのヘルスチェックパス。app の liveness エンドポイント"
+  type        = string
+  default     = "/api/health"
+}
+
+variable "container_insights" {
+  description = "ECS Container Insights (disabled / enabled / enhanced)。CloudWatch の課金が増えるため既定は disabled。CPU / メモリの基本メトリクスは無効でも取れる"
+  type        = string
+  default     = "disabled"
+
+  validation {
+    condition     = contains(["disabled", "enabled", "enhanced"], var.container_insights)
+    error_message = "container_insights は disabled / enabled / enhanced のいずれかを指定してください。"
+  }
+}
+
+variable "log_retention_days" {
+  description = "CloudWatch Logs の保持日数"
+  type        = number
+  default     = 14
+}
+
+# ---------------------------------------------------------------------------
+# ALB
+# ---------------------------------------------------------------------------
+
+variable "alb_ingress_cidrs" {
+  description = "ALB へのアクセスを許可する CIDR"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+variable "certificate_arn" {
+  description = "HTTPS を使う場合の ACM 証明書 ARN。null なら HTTP (80) のみ公開する"
+  type        = string
+  default     = null
+}
+
+# ---------------------------------------------------------------------------
+# アプリ用 RDS
+# ---------------------------------------------------------------------------
+
+variable "app_db_name" {
+  description = "アプリ用データベースの初期データベース名"
+  type        = string
+  default     = "app"
+}
+
+variable "app_db_username" {
+  description = "アプリ用データベースのマスターユーザー名"
+  type        = string
+  default     = "postgres"
+}
+
+variable "app_db_instance_class" {
+  description = "アプリ用 RDS のインスタンスクラス。既定は統計 DB と同じ"
+  type        = string
+  default     = "db.t4g.small"
+}
+
+variable "app_db_allocated_storage" {
+  description = "アプリ用 RDS のストレージ (GiB)"
+  type        = number
+  default     = 200
+}
+
+variable "app_db_engine_version" {
+  description = "アプリ用 RDS の PostgreSQL バージョン。既定は統計 DB と同じ"
+  type        = string
+  default     = "17.7"
+}
+
+variable "app_db_backup_retention_days" {
+  description = "アプリ用 RDS の自動バックアップ保持日数。0 で無効"
+  type        = number
+  default     = 7
+}
+
+variable "app_db_deletion_protection" {
+  description = "アプリ用 RDS の削除保護。ハッカソン中の作り直しを想定して既定は false"
+  type        = bool
+  default     = false
+}
+
+# ---------------------------------------------------------------------------
+# IAM (参照専用ユーザー)
+# ---------------------------------------------------------------------------
+
 variable "readonly_user_name" {
   description = "参照専用 IAM ユーザーの名前"
   type        = string
