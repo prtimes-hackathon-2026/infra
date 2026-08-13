@@ -13,6 +13,16 @@ output "region" {
   value       = data.aws_region.current.region
 }
 
+output "db_endpoint" {
+  description = "RDS インスタンスの接続先 (host:port)"
+  value       = aws_db_instance.hackathon.endpoint
+}
+
+output "db_arn" {
+  description = "RDS インスタンスの ARN"
+  value       = aws_db_instance.hackathon.arn
+}
+
 output "readonly_user_arn" {
   description = "参照専用 IAM ユーザーの ARN"
   value       = aws_iam_user.readonly.arn

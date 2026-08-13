@@ -8,9 +8,10 @@ AWS を Terraform Cloud (HCP Terraform) で管理するための構成です。
 | --- | --- |
 | `versions.tf` | `cloud` ブロック（organization / workspace）と provider のバージョン制約 |
 | `providers.tf` | AWS provider。リージョンと `default_tags` |
-| `variables.tf` | `aws_region` / `environment` |
+| `variables.tf` | `aws_region` / `environment` / RDS・IAM ユーザー向けの変数 |
 | `main.tf` | 疎通確認用の data source |
 | `iam_readonly.tf` | 参照専用 IAM ユーザー、コンソールログイン、アクセスキー |
+| `rds.tf` | 既存 RDS (`prtimes-hackathon-2026summer-db`) の import 定義 |
 | `outputs.tf` | 実際に認証できたアカウント ID・ARN・リージョン、参照専用ユーザーの認証情報 |
 
 ## セットアップ
@@ -186,6 +187,82 @@ Terraform 側に作らせたい場合は `create_access_key = true` にすると
 シークレットは **state に平文で保存される**点に注意してください（state は
 Terraform Cloud 側にあり、ワークスペースの閲覧権限を持つ人は
 `terraform output` 経由で取り出せます）。
+
+## RDS (`prtimes-hackathon-2026summer-db`) の取り込み
+
+### 前提
+
+この RDS は CloudFormation スタック `prtimes-hackathon-2026summer`（論理 ID
+`HackathonDb`）で作られたものです。VPC / サブネット / pgAdmin 用 EC2 も同じ
+スタックにあります。Terraform に import しても CFN 側の管理からは外れないため、
+**二重管理**になります。特に次の点に注意してください。
+
+- CFN テンプレートの `DeletionPolicy` / `UpdateReplacePolicy` は **`Delete`**。
+  スタックを削除すると Terraform の `prevent_destroy` とは無関係に DB も消えます。
+  → CloudFormation コンソールでスタックの **termination protection を有効化**してください。
+- CFN 側でスタック更新をかけると、Terraform で変えた設定がテンプレートの値に
+  戻される可能性があります。以後この DB の設定変更は Terraform 側に寄せる想定です。
+
+### 現状のバックアップ状況（重要）
+
+| 項目 | 値 |
+| --- | --- |
+| 自動バックアップ保持日数 | `0`（＝**無効**、PITR 不可） |
+| 手動スナップショット | **0 件** |
+| 削除保護 | 無効 |
+| ストレージ暗号化 | 無効（後から有効化はできない） |
+
+import 作業自体はデータに触れませんが、**復旧手段が何もない状態**です。
+作業前に手動スナップショットを取ってください（手動スナップショットは
+インスタンスを消しても残ります）。
+
+```bash
+aws rds create-db-snapshot \
+  --region ap-northeast-1 \
+  --db-instance-identifier prtimes-hackathon-2026summer-db \
+  --db-snapshot-identifier prtimes-hackathon-2026summer-db-before-tfimport
+
+# 完了まで待つ
+aws rds wait db-snapshot-available \
+  --region ap-northeast-1 \
+  --db-snapshot-identifier prtimes-hackathon-2026summer-db-before-tfimport
+```
+
+`readonly` ユーザーでは実行できません。管理者権限のプロファイルかコンソールから
+実行してください。
+
+### 取り込み手順
+
+`rds.tf` に `import` ブロックと `aws_db_instance.hackathon` を定義済みです。
+属性値はすべて現状の AWS 側の値に合わせてあります。
+
+1. スナップショットを取る（上記）
+2. `terraform plan` を実行し、次を確認する
+   - `1 to import, 0 to add, 0 to change, 0 to destroy`
+     （タグは provider の `default_tags` で `Environment` / `ManagedBy` /
+     `Workspace` が付くため、その分だけ in-place の変更として出ます。
+     タグの付与はデータに影響しません）
+   - **`must be replaced` / `forces replacement` の行が 1 つも無いこと**。
+     もし出ていたら apply せず、差分の出ている属性を `rds.tf` の値に反映してから
+     やり直してください（RDS の replacement は作り直し＝データ消失です）
+3. `terraform apply`
+4. import 後は `import` ブロックを削除しても構いません（残しても no-op です）
+
+run ロールには `rds:DescribeDBInstances` / `rds:ListTagsForResource` /
+`rds:AddTagsToResource` / `rds:ModifyDBInstance` が必要です。
+
+### 取り込み後の安全側への変更（任意・別 apply 推奨）
+
+`rds.tf` はデフォルトで現状維持なので、必要に応じて変数を変えてください。
+
+| 変数 | 変更内容 | 影響 |
+| --- | --- | --- |
+| `db_deletion_protection = true` | RDS の削除保護 | 無停止。CFN のスタック削除も失敗するようになる |
+| `db_backup_retention_period = 7` | 自動バックアップ・PITR を有効化 | **`0` → `1` 以上への変更はインスタンス再起動を伴う**（数十秒〜数分の断） |
+
+`aws_db_instance.hackathon` には `prevent_destroy = true` と
+`skip_final_snapshot = false` を設定してあるため、`terraform destroy` は失敗し、
+仮に外しても最終スナップショットを取らずには削除できません。
 
 ## 補足
 

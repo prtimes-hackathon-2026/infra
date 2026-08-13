@@ -10,6 +10,36 @@ variable "environment" {
   default     = "dev"
 }
 
+variable "db_identifier" {
+  description = "Terraform 管理下に取り込む RDS インスタンスの識別子"
+  type        = string
+  default     = "prtimes-hackathon-2026summer-db"
+}
+
+variable "db_backup_retention_period" {
+  description = "自動バックアップの保持日数。0 で無効 (既存の値)。1 以上に変える際は下記の注意を読むこと"
+  type        = number
+
+  # 既定は 0。現状の AWS 側の値に合わせてあり、これを変えないかぎり import は
+  # 差分なしで通る。0 -> 1 以上への変更はインスタンスの再起動 (数十秒〜数分の
+  # 断) を伴うため、メンテナンスウィンドウか停止できるタイミングで行うこと。
+  default = 0
+
+  validation {
+    condition     = var.db_backup_retention_period >= 0 && var.db_backup_retention_period <= 35
+    error_message = "db_backup_retention_period は 0〜35 の範囲で指定してください。"
+  }
+}
+
+variable "db_deletion_protection" {
+  description = "RDS の削除保護を有効にするか。既定は false (既存の値)"
+  type        = bool
+
+  # true にすると無停止で削除保護が入る。CloudFormation のスタック削除も
+  # 失敗するようになるため、事故防止としては効果が大きい。
+  default = false
+}
+
 variable "readonly_user_name" {
   description = "参照専用 IAM ユーザーの名前"
   type        = string
