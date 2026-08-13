@@ -44,3 +44,18 @@ output "readonly_secret_access_key" {
   value       = try(aws_iam_access_key.readonly[0].secret, null)
   sensitive   = true
 }
+
+output "rds_endpoint" {
+  description = "PostgreSQL の接続エンドポイント (host:port)"
+  value       = aws_db_instance.hackathon.endpoint
+}
+
+output "rds_address" {
+  description = "PostgreSQL のホスト名"
+  value       = aws_db_instance.hackathon.address
+}
+
+output "rds_arn" {
+  description = "RDS インスタンスの ARN"
+  value       = aws_db_instance.hackathon.arn
+}

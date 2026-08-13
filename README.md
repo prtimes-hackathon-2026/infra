@@ -11,6 +11,7 @@ AWS を Terraform Cloud (HCP Terraform) で管理するための構成です。
 | `variables.tf` | `aws_region` / `environment` |
 | `main.tf` | 疎通確認用の data source |
 | `iam_readonly.tf` | 参照専用 IAM ユーザー、コンソールログイン、アクセスキー |
+| `rds.tf` | 既存の RDS (PostgreSQL) を取り込む `import` ブロックとリソース定義 |
 | `outputs.tf` | 実際に認証できたアカウント ID・ARN・リージョン、参照専用ユーザーの認証情報 |
 
 ## セットアップ
@@ -186,6 +187,121 @@ Terraform 側に作らせたい場合は `create_access_key = true` にすると
 シークレットは **state に平文で保存される**点に注意してください（state は
 Terraform Cloud 側にあり、ワークスペースの閲覧権限を持つ人は
 `terraform output` 経由で取り出せます）。
+
+## RDS を Terraform 管理下に移す
+
+### 現状
+
+ハッカソン環境の実リソースは、すべて CloudFormation スタック
+`prtimes-hackathon-2026summer` が作成したものです。
+
+| 種別 | 物理 ID |
+| --- | --- |
+| VPC | `vpc-00a084258f8af45ee` (10.0.0.0/16) |
+| プライベートサブネット | `subnet-02b72eb0bd260a389` (1a) / `subnet-0a0fb586a10cf3aa3` (1c) |
+| DB サブネットグループ | `prtimes-hackathon-2026summer-dbsubnetgroup-6r3h5y8laexs` |
+| RDS セキュリティグループ | `sg-07a56fdc4aafa5704` |
+| **RDS (PostgreSQL 17.7)** | **`prtimes-hackathon-2026summer-db`** |
+| pgAdmin EC2 | `i-03d2c129397aa9185` (EIP `13.158.197.89`) |
+
+RDS はテンプレートのパラメータでは `db.m7i.large` ですが、実際には
+`db.t4g.small` に手で変更されています（= すでに CloudFormation ドリフトがある状態）。
+`rds.tf` / `variables.tf` の既定値は**実リソースの現状**に合わせてあります。
+
+### 先に必要な作業: run ロールへの RDS 権限追加
+
+run ロール `terraform-policy` には現在 **IAM 系の権限しか付いていません**
+（インラインポリシー `terraform-policyPolicy`）。このままだと Terraform Cloud での
+plan が `rds:DescribeDBInstances` の AccessDenied で失敗します。
+
+IAM コンソールで `terraform-policy` ロールに次のステートメントを追加してください。
+
+```json
+{
+  "Sid": "ManageHackathonRds",
+  "Effect": "Allow",
+  "Action": [
+    "rds:DescribeDBInstances",
+    "rds:ListTagsForResource",
+    "rds:AddTagsToResource",
+    "rds:RemoveTagsFromResource",
+    "rds:ModifyDBInstance"
+  ],
+  "Resource": [
+    "arn:aws:rds:ap-northeast-1:317695556802:db:prtimes-hackathon-2026summer-db",
+    "arn:aws:rds:ap-northeast-1:317695556802:db:*"
+  ]
+}
+```
+
+`rds:DeleteDBInstance` は意図的に含めていません。付けなければ、`prevent_destroy`
+に加えて IAM 側でも削除を防げます。
+
+### 手順
+
+`rds.tf` の `import` ブロックが取り込みを行います。追加の CLI 操作は不要です。
+
+1. 上記の RDS 権限を run ロールに追加する
+2. この変更を main にマージする
+3. Terraform Cloud の workspace `aws` で plan を確認する
+4. apply する
+
+読み取り専用の認証情報でローカル検証した plan では、RDS への変更は
+**state 上だけの項目とタグ追加のみ**で、再作成や設定変更は発生しませんでした。
+
+```
+# aws_db_instance.hackathon will be imported then updated in-place
+  + apply_immediately         = false
+  + final_snapshot_identifier = "prtimes-hackathon-2026summer-db-final"
+  ~ skip_final_snapshot       = true -> false
+  ~ tags_all                  = { + Environment, + ManagedBy, + Workspace }
+
+Plan: 1 to import, 0 to add, 1 to change, 0 to destroy.
+```
+
+`apply_immediately` / `skip_final_snapshot` / `final_snapshot_identifier` は
+AWS API 上の属性ではなく Terraform 側の挙動を決める値なので、AWS への変更は
+`default_tags` の3タグ追加だけです。
+
+apply が通ったら `import` ブロックは削除して構いません（残っていても
+state に取り込み済みのリソースは無視されます）。
+
+### 重要: CloudFormation との二重管理について
+
+import したあとも、この RDS は **CloudFormation スタックのメンバーのまま**です。
+Terraform から見えるのは AWS API の状態だけなので、スタック側を更新すると
+Terraform で入れた変更が巻き戻される可能性があります。
+
+さらに、テンプレート上 RDS は次の設定になっています。
+
+```yaml
+HackathonDb:
+  Type: AWS::RDS::DBInstance
+  DeletionPolicy: Delete
+  UpdateReplacePolicy: Delete
+```
+
+**スタックを削除すると DB も消えます。** Terraform 側の `prevent_destroy` は
+CloudFormation の削除を止められません。
+
+恒久的に Terraform 側へ寄せるなら、import 後に次を実施してください。
+
+1. テンプレートの `HackathonDb` を `DeletionPolicy: Retain` /
+   `UpdateReplacePolicy: Retain` に変更してスタックを更新する
+2. テンプレートから `HackathonDb` を削除してスタックを更新する
+   （Retain 済みなので実リソースは残り、スタックの管理から外れる）
+3. 以降は Terraform だけが管理者になる
+
+1 と 2 はハッカソン運営が配布したテンプレートに手を入れる作業なので、
+実施前に運営側と合意を取ってください。それまでの間は
+**CloudFormation スタックを更新・削除しない**運用でカバーします。
+
+### サブネットグループ / セキュリティグループを取り込まない理由
+
+これらも CloudFormation 管理ですが、RDS から参照するだけなら ID を
+変数で渡せば足ります。二重管理するリソースを1つに絞るため、`rds.tf` では
+`var.rds_subnet_group_name` / `var.rds_security_group_id` として
+文字列参照にとどめています。
 
 ## 補足
 
