@@ -621,7 +621,8 @@ aws ecs execute-command --interactive --command /bin/sh \
 
 ## PR プレビュー環境
 
-app リポジトリの PR ごとに `https://pr-<番号>.preview.<ドメイン>` を生やす構成を
+app リポジトリの PR ごとに
+`https://pr-<番号>.preview-prtimes-hackathon-2026.naohanpen.dev` を生やす構成を
 検討しています。**設計のみで、まだ実装されていません。** 共有 ALB に相乗りして
 PR ごとに ECS サービスとリスナールールだけを作り、DB はプレビュー用 RDS の中に
 PR ごとの database を切る方針です。

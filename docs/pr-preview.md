@@ -10,24 +10,24 @@ app リポジトリの Pull Request ごとに、その PR のコードが動く 
 
 ## 完成形
 
-PR #123 を開くと `https://pr-123.preview.example.com` が生え、PR にコメントで URL が
-付きます。push するたび入れ替わり、PR を閉じると消えます。
+PR #123 を開くと `https://pr-123.preview-prtimes-hackathon-2026.naohanpen.dev` が生え、
+PR にコメントで URL が付きます。push するたび入れ替わり、PR を閉じると消えます。
 
 ```
 app に PR #123 を open / push
-  └─ build   : ghcr.io/.../app:pr-123 と app-migrator:pr-123 を publish
+  └─ build   : ghcr.io/.../app:pr-123 を publish
      └─ preview: (needs: build) TFC の変数 preview_pull_requests に
                  {number = 123, image_tag = "pr-123"} を追加
                  → aws-preview ワークスペースの run を起動 (auto-apply)
                     └─ Terraform が PR 123 用の TG / リスナールール / ECS サービスを作る
-                       └─ タスク起動時に bootstrap → migrate → app の順にコンテナが走る
-     └─ comment: https://pr-123.preview.example.com を PR にコメント
+                       └─ タスク起動時に bootstrap → app の順にコンテナが走る
+     └─ comment: https://pr-123.preview-prtimes-hackathon-2026.naohanpen.dev をコメント
 
 PR #123 を close
   └─ preview: 変数から 123 を取り除いて run 起動 → 該当リソースだけ destroy
 ```
 
-> `example.com` はプレースホルダです。実際に使うドメインが決まったら
+> ドメインは `preview-prtimes-hackathon-2026.naohanpen.dev` を使います。
 > `preview_domain` 変数の既定値として置きます。
 
 ## 全体構成
@@ -48,18 +48,38 @@ ALB・ECS クラスター・RDS インスタンス・サブネット・SG は**�
 
 | 項目 | 値 |
 | --- | --- |
-| 条件 | `host-header = pr-<番号>.preview.example.com` |
+| 条件 | `host-header = pr-<番号>.preview-prtimes-hackathon-2026.naohanpen.dev` |
 | 優先度 | `1000 + PR 番号` |
 | アクション | forward → PR 用ターゲットグループ |
-
-DNS は `*.preview.example.com` の A (ALIAS) レコード 1 本を ALB に向けるだけで、
-PR ごとにレコードを作る必要はありません。証明書も `*.preview.example.com` の
-ワイルドカード 1 枚で済みます（ワイルドカードは 1 ラベル分だけ対応するので、
-`pr-123.preview.example.com` はカバーされます）。
 
 同時プレビュー数の上限は**リスナールールのクォータ 100 件**です。ハッカソン規模なら
 十分ですが、優先度に PR 番号をそのまま足しているため、PR 番号が 49000 を超えると
 （クォータ上限 50000 に当たって）破綻します。実質的には起こりません。
+
+### DNS と証明書
+
+`preview-prtimes-hackathon-2026.naohanpen.dev` の Route 53 ホストゾーンをこのアカウント
+に作り、**親ゾーン `naohanpen.dev` 側に NS レコードで委任**します。親ゾーンが別アカウント
+や別の DNS サービスにある場合、この委任だけは手作業になります。
+
+| レコード | 向き先 | 用途 |
+| --- | --- | --- |
+| `*.preview-prtimes-hackathon-2026.naohanpen.dev` A (ALIAS) | ALB | 全 PR をこれ 1 本で賄う |
+| `preview-prtimes-hackathon-2026.naohanpen.dev` (apex) A (ALIAS) | ALB | 既存の dev アプリ（リスナーの既定アクション） |
+
+PR ごとに DNS レコードを作る必要はありません。証明書も ACM で 1 枚だけ取り、
+ワイルドカードと apex の 2 つの名前を載せます。
+
+- `*.preview-prtimes-hackathon-2026.naohanpen.dev`（`pr-123.…` をカバー）
+- `preview-prtimes-hackathon-2026.naohanpen.dev`（ワイルドカードは 1 ラベル分しか
+  対応しないので、apex は別途 SAN に入れる）
+
+apex を含めておくのは、`certificate_arn` を設定すると HTTP が HTTPS にリダイレクト
+されるようになり、**ALB の DNS 名で直接アクセスすると証明書エラーになる**ためです。
+既存の dev アプリにも、このドメインで正規の名前を与えておくのが素直です。
+
+> `.dev` は HSTS preload されているため、ブラウザからは HTTP で到達できません。
+> 証明書と DNS を用意する段階 0 は、プレビュー以前に必須の作業になります。
 
 ### PR ごとに作るリソース (`modules/preview`)
 
@@ -69,7 +89,7 @@ PR ごとにレコードを作る必要はありません。証明書も `*.prev
 | `aws_lb_listener_rule` | — | 上記のホストヘッダ条件 |
 | `aws_cloudwatch_log_group` | `/ecs/webapp-preview/pr-123` | 保持 3 日 |
 | `aws_secretsmanager_secret` | `webapp-preview/pr-123/app-db-url` | PR 専用ロールでの接続 URL。PR のコードに渡すのはこれだけ |
-| `aws_ecs_task_definition` | `webapp-pr-123` | 256 CPU / 512 MiB。`bootstrap` + `migrate` + `app` の 3 コンテナ |
+| `aws_ecs_task_definition` | `webapp-pr-123` | 256 CPU / 512 MiB。`bootstrap` + `app` の 2 コンテナ |
 | `aws_ecs_service` | `webapp-pr-123` | `desired_count = 1`、`FARGATE_SPOT` |
 
 SG・サブネット・タスクロール・実行ロールは共有基盤のものをそのまま使います。
@@ -99,32 +119,34 @@ capacity provider には `FARGATE_SPOT` が既に登録済みです）。
 
 ### database とロールの作成は bootstrap コンテナが行う
 
-ここが設計上いちばん悩んだところです。**Terraform Cloud は SaaS なので、プライベート
-サブネットにいる RDS に到達できません。** つまり `postgresql` provider で
-`CREATE DATABASE` を実行することはできず、マイグレーションも同様です。
+**Terraform Cloud は SaaS なので、プライベートサブネットにいる RDS に到達できません。**
+つまり `postgresql` provider で `CREATE DATABASE` を実行することはできません。
 
-採る方式は、**PR 用タスク定義にコンテナを 3 つ積み、ECS のコンテナ依存関係
-(`dependsOn` の `SUCCESS` 条件) で順に走らせる**やり方です。
+一方で**マイグレーションは考える必要がありません**。app は main で起動時マイグレーション
+を導入済みで、コンテナが立ち上がるときに自分でスキーマを合わせます。プレビューも同じ
+仕組みにそのまま乗ります。
+
+残る仕事は「app が接続しにいく前に database とロールが存在していること」だけです。これを
+bootstrap コンテナが用意し、ECS のコンテナ依存関係 (`dependsOn` の `SUCCESS` 条件) で
+app より先に走らせます。
 
 ```
 タスク起動
-  ├─ bootstrap コンテナ            ← main からビルドした固定イメージ (:main)
+  ├─ bootstrap コンテナ    ← public.ecr.aws/docker/library/postgres:17-alpine（上流の公式イメージ）
   │    ADMIN_DATABASE_URL（プレビュー RDS の管理者）と、
-  │    APP_DATABASE_URL（PR 用ロールの URL。ここから名前とパスワードを取る）を受け取り、
-  │    1. pr_123 database が無ければ CREATE DATABASE
-  │    2. pr_123 ロールが無ければ CREATE ROLE（パスワードは Terraform が生成）
-  │    3. pr_123 database にだけ権限を GRANT
-  │    4. exit 0
-  ├─ migrate コンテナ (dependsOn: bootstrap = SUCCESS)   ← PR のコード
-  │    APP_DATABASE_URL に対して drizzle-kit migrate → exit 0
-  └─ app コンテナ (dependsOn: migrate = SUCCESS)          ← PR のコード
-       node server.js
+  │    APP_DATABASE_URL（PR 用ロールの URL。名前とパスワードはここから取る）を受け取り、
+  │    psql で pr_123 の database とロールを、無ければ作る（冪等な SQL）→ exit 0
+  └─ app コンテナ (dependsOn: bootstrap = SUCCESS)   ← PR のコード
+       起動時マイグレーションが pr_123 にスキーマを作り、node server.js が listen する
 ```
 
-**管理者資格情報を受け取るのは bootstrap だけ**で、これは main からビルドした固定
-イメージです。PR 由来の migrate / app に渡すのは `pr_123` ロールの URL だけなので、
-ある PR のコードが他の PR の database を読み書きすることはできません。database を
-分けることが、単なる名前空間ではなく**認可境界**として成立します。
+bootstrap は**アプリのイメージを一切使いません**。上流の postgres 公式イメージに SQL を
+渡すだけなので、PR のコードが混入する余地がそもそもありません（Docker Hub のレート制限を
+避けて ECR Public を指定しています）。
+
+**管理者資格情報を受け取るのは bootstrap だけ**で、PR 由来の app に渡すのは `pr_123`
+ロールの URL だけです。ある PR のコードが他の PR の database を読み書きすることは
+できず、database を分けることが単なる名前空間ではなく**認可境界**として成立します。
 
 同一タスク内でも ECS の `secrets` はコンテナごとに解決されるため、bootstrap の環境変数を
 app のコードから読むことはできません。加えて、管理者シークレットの `GetSecretValue` は
@@ -133,17 +155,15 @@ app のコードから読むことはできません。加えて、管理者シ�
 できません。
 
 Terraform だけで完結するのも利点です。GitHub Actions から `ecs run-task` を叩く必要が
-なく、Actions に AWS の権限を一切渡さずに済みます。bootstrap や migrate が失敗すれば
-タスクは起動せず、デプロイサーキットブレーカーが働きます。
+なく、Actions に AWS の権限を一切渡さずに済みます。bootstrap が失敗すれば app は起動
+せず、デプロイサーキットブレーカーが働きます。
 
-タスクが起動するたびに bootstrap と migrate が走りますが、どちらも冪等です。イメージ
-pull の分、起動が 30〜40 秒延びます。
+タスクが起動するたびに bootstrap が走りますが冪等です。イメージ pull の分、起動が
+10〜20 秒延びます。
 
-**app リポジトリ側に必要な変更**: 現在の `Dockerfile` は `output: 'standalone'` の
-ランタイムイメージで、`drizzle-kit` を含んでいません。`migrator` ステージ
-（devDependencies と `drizzle/` を含む）を足し、`ghcr.io/.../app-migrator` として
-publish する必要があります。bootstrap は同じ `migrator` イメージの `:main` タグを
-エントリポイントだけ変えて流用すれば足り、3 つめのイメージは要りません。
+**app リポジトリの `Dockerfile` に変更は要りません。** 起動時マイグレーションがある
+おかげで `drizzle-kit` を含む migrator イメージを別途用意する必要がなく、app 側で必要な
+のはワークフローの変更だけです。
 
 ### 後片付けは PR の database とロールを残します
 
@@ -151,8 +171,8 @@ PR を閉じても `pr_123` の database とロールは残ります。Terraform
 `DROP DATABASE` を実行する手段がない（同じ到達性の問題）ためです。空の database は
 ほぼ無料なので放置でも構いませんが、気になるなら後述のスイーパーで
 EventBridge Scheduler → `ecs run-task` を組み、開いていない PR のものを落として
-ください。この掃除タスクも管理者資格情報を使うので、bootstrap と同じく main 由来の
-イメージで動かします。
+ください。この掃除タスクも管理者資格情報を使うので、bootstrap と同じ postgres
+イメージに SQL を渡す形で動かします。
 
 ## 制御プレーン: ワークスペースを分ける
 
@@ -315,9 +335,9 @@ README の「デプロイ手順」1 のインラインポリシーに、以下�
 
 | 段階 | やること | 単体で価値があるか |
 | --- | --- | --- |
-| 0 | ドメイン取得、ACM 証明書、Route 53、`certificate_arn` を設定して HTTPS 化 | ある（本番も HTTPS になる） |
+| 0 | Route 53 ホストゾーン作成と親ゾーンからの NS 委任、ACM 証明書、`certificate_arn` を設定して HTTPS 化 | ある（`.dev` は HSTS preload のため必須） |
 | 1 | 共有基盤の output 追加、`modules/preview` 実装、`aws-preview` ワークスペースを手動 apply で 1 PR 試す | ある（手動プレビューとして使える） |
-| 2 | app リポジトリの `migrator` イメージ（bootstrap 兼用）、`preview.yml`、`docker-publish.yml` の PR タグ対応と `preview` job | ある（ここで自動化が完成） |
+| 2 | app リポジトリの `preview.yml` と、`docker-publish.yml` の PR タグ対応・`preview` job（`Dockerfile` の変更は不要） | ある（ここで自動化が完成） |
 | 3 | 夜間の再収束ジョブ | 運用の安全弁 |
 
 段階 0 は独立していて、プレビューをやらない場合でも入れる価値があります。
@@ -345,5 +365,6 @@ README の「デプロイ手順」1 のインラインポリシーに、以下�
 | PR ごとに TFC ワークスペース | state が散らかり、destroy 漏れの検知が難しい。変数 1 つの `for_each` で足りる |
 | Actions から AWS CLI で直接作る | Terraform を経由しないぶん速いが、Actions に `CreateService` / `PassRole` 相当の強い権限を渡すことになる。drift も追えない |
 | Actions から `ecs run-task` でマイグレーション | 同上。コンテナ依存関係を使えば Terraform だけで完結する |
-| 管理者資格情報を PR 由来の migrator に渡す | PR のコードが同一インスタンス上の全 PR の database を触れてしまい、database を分ける意味が失われる。bootstrap を main 由来の固定イメージに分けた |
+| migrator イメージを別に作って migrate コンテナを挟む | app が main で起動時マイグレーションを持っているので不要。bootstrap は database とロールの作成だけに絞れる |
+| 管理者資格情報を PR 由来のコンテナに渡す | PR のコードが同一インスタンス上の全 PR の database を触れてしまい、database を分ける意味が失われる。bootstrap を上流の postgres イメージに分離した |
 | プレビューの閲覧を IP で制限する | 統計データはチーム内で見えて差し支えないという判断。必要になればリスナールールに条件を 1 つ足すだけで後から入れられる |
