@@ -111,3 +111,12 @@ output "readonly_secret_access_key" {
   value       = try(aws_iam_access_key.readonly[0].secret, null)
   sensitive   = true
 }
+
+# ---------------------------------------------------------------------------
+# IAM (GitHub Actions)
+# ---------------------------------------------------------------------------
+
+output "github_actions_deploy_role_arn" {
+  description = "app リポジトリの Actions Variable AWS_DEPLOY_ROLE_ARN に設定するロールの ARN"
+  value       = aws_iam_role.github_actions_deploy.arn
+}
