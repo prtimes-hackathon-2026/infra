@@ -63,23 +63,28 @@ module "preview" {
   aws_region = var.aws_region
 
   # 共有基盤から借りるもの
+  #
+  # 値が null の output は state の outputs から属性ごと消える (null として
+  # 残らない) ため、共有側で null になりうるものは try(..., null) で受ける。
+  # そのまま参照すると原因の分かりにくい「Unsupported attribute」で落ち、
+  # 上の check の警告も出ないまま終わってしまう。
   vpc_id                          = local.shared.vpc_id
   subnet_ids                      = local.shared.public_subnet_ids
   security_group_ids              = [local.shared.ecs_tasks_security_group_id]
   cluster_arn                     = local.shared.ecs_cluster_arn
-  listener_arn                    = local.shared.https_listener_arn
+  listener_arn                    = try(local.shared.https_listener_arn, null)
   task_execution_role_arn         = local.shared.task_execution_role_arn
   task_role_arn                   = local.shared.task_role_arn
-  preview_domain                  = local.shared.preview_domain
+  preview_domain                  = try(local.shared.preview_domain, null)
   container_port                  = local.shared.container_port
   health_check_path               = local.shared.health_check_path
-  registry_credentials_secret_arn = local.shared.registry_credentials_secret_arn
+  registry_credentials_secret_arn = try(local.shared.registry_credentials_secret_arn, null)
   stats_db_secret_arn             = local.shared.stats_db_secret_arn
 
   # プレビュー用 DB
-  db_address          = local.shared.preview_db_address
-  db_port             = local.shared.preview_db_port
-  admin_db_secret_arn = local.shared.preview_admin_db_secret_arn
+  db_address          = try(local.shared.preview_db_address, null)
+  db_port             = try(local.shared.preview_db_port, null)
+  admin_db_secret_arn = try(local.shared.preview_admin_db_secret_arn, null)
 
   # サイズと寿命
   task_cpu           = var.task_cpu
