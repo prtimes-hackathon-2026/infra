@@ -1,0 +1,13 @@
+.terraform/
+.terraform.lock.hcl.bak
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# 認証情報が入りうるファイルはコミットしない (値は Terraform Cloud の Variables に置く)
+*.tfvars
+*.tfvars.json
+!example.tfvars
+.terraformrc
+terraform.rc
