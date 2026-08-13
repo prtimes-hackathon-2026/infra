@@ -16,6 +16,7 @@ AWS を Terraform Cloud (HCP Terraform) で管理するための構成です。
 | `alb.tf` | ALB、ターゲットグループ、リスナー |
 | `ecs.tf` | ECS クラスター、タスク定義、サービス、ロググループ |
 | `iam_ecs.tf` | ECS のタスク実行ロールとタスクロール |
+| `iam_github_actions.tf` | app リポジトリの Actions が自動デプロイに使う OIDC ロール |
 | `rds.tf` | アプリ用 PostgreSQL、既存の統計 DB の参照、シークレット |
 | `outputs.tf` | アカウント情報、アプリの URL、DB エンドポイント、認証情報 |
 
@@ -291,6 +292,9 @@ state に入れたくない場合は、Terraform 1.11+ の write-only 引数
 | `app_db_instance_class` | `db.t4g.small` | 統計 DB と同じ |
 | `app_db_allocated_storage` | `200` | GiB。統計 DB は 1000 だがアプリ用は小さくしてある |
 | `container_insights` | `disabled` | 課金が増えるため既定は無効 |
+| `github_deploy_repository` | `prtimes-hackathon-2026/app` | 自動デプロイを許可するリポジトリ |
+| `github_deploy_branches` | `["main"]` | 自動デプロイを許可するブランチ |
+| `create_github_oidc_provider` | `true` | GitHub 用 OIDC プロバイダを Terraform で作るか |
 
 ### デプロイ手順
 
@@ -382,6 +386,22 @@ run ロール自身の権限は Terraform では管理できません（自分�
       "Resource": ["arn:aws:iam::317695556802:role/webapp-*"]
     },
     {
+      "Sid": "ManageGithubOidcProvider",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateOpenIDConnectProvider",
+        "iam:DeleteOpenIDConnectProvider",
+        "iam:GetOpenIDConnectProvider",
+        "iam:ListOpenIDConnectProviderTags",
+        "iam:TagOpenIDConnectProvider",
+        "iam:UntagOpenIDConnectProvider",
+        "iam:UpdateOpenIDConnectProviderThumbprint",
+        "iam:AddClientIDToOpenIDConnectProvider",
+        "iam:RemoveClientIDFromOpenIDConnectProvider"
+      ],
+      "Resource": "arn:aws:iam::317695556802:oidc-provider/token.actions.githubusercontent.com"
+    },
+    {
       "Sid": "PassRolesToEcs",
       "Effect": "Allow",
       "Action": "iam:PassRole",
@@ -438,6 +458,22 @@ run ロール自身の権限は Terraform では管理できません（自分�
 
 `elasticloadbalancing` / `ecs` / `rds` / `logs` はサービス単位のワイルドカードに
 しています（リージョンだけ制限）。扱うリソースが固まったら絞り込んでください。
+
+`ManageGithubOidcProvider` は自動デプロイ（後述）用の OIDC プロバイダを Terraform で
+作るためのものです。`ListOpenIDConnectProviderTags` は refresh のたびに呼ばれる
+（`default_tags` を付けているため）ので、無いと apply ではなく plan の時点で
+`AccessDenied` になります。`AddClientID*` / `RemoveClientID*` は `client_id_list` を
+変更したときだけ必要で、`UpdateOpenIDConnectProviderThumbprint` は
+`thumbprint_list` を指定した場合のみ使われます（現状は指定していません）。
+
+プロバイダを Terraform で管理しない場合（`create_github_oidc_provider = false`）は、
+この statement の代わりに `iam:GetOpenIDConnectProvider` と
+`iam:ListOpenIDConnectProviders`（`Resource` は `*`。URL からプロバイダを引くのに
+一覧が要る）だけあれば足ります。
+
+デプロイ用ロール本体は `webapp-dev-github-actions-deploy` で `webapp-*` に収まるため、
+`ManageEcsRoles` の範囲内で追加の権限は要りません。ただし後からロールの
+`description` や `max_session_duration` を変えると `iam:UpdateRole` が必要になります。
 
 **2. イメージが pull できる状態か確認する**
 
@@ -497,17 +533,64 @@ curl -i "$(terraform output -raw app_url)"
 `/api/health` は DB に触らないので、DB 接続が壊れていても 200 を返します。DB まで
 確認したい場合はアプリの画面を開くか、`aws logs tail` でエラーを確認してください。
 
-### 運用
+### 自動デプロイ (GitHub Actions + OIDC)
 
 既定のイメージは `:latest` を指しています。タグが変わらないと Terraform には差分が
-出ないため、**新しいイメージを push しても `terraform apply` だけではデプロイされません**。
-強制的に入れ替えます:
+出ないため、**新しいイメージを push しても `terraform apply` ではデプロイされません**。
+そこで app リポジトリの `docker-publish.yml` に `deploy` ジョブを置き、main への
+push でイメージを publish した直後に `update-service --force-new-deployment` を
+叩かせています。デプロイの流れはこうなります。
+
+```
+app の main に push
+  └─ build   : ghcr.io/prtimes-hackathon-2026/app:latest を publish
+     └─ deploy: OIDC で webapp-dev-github-actions-deploy を引き受ける
+                → aws ecs update-service --force-new-deployment
+                → aws ecs wait services-stable で収束を待つ
+```
+
+長期のアクセスキーは配りません。`iam_github_actions.tf` が GitHub の OIDC
+プロバイダとデプロイ専用ロールを作り、信頼ポリシーで
+`repo:prtimes-hackathon-2026/app:ref:refs/heads/main` からの実行だけに絞っています
+（`aud` も `sts.amazonaws.com` に固定）。ロールにできるのは**この ECS サービスの
+`UpdateService` / `DescribeServices` だけ**です。
+
+**セットアップ (1 回だけ)**
+
+1. run ロールに `ManageGithubOidcProvider` を追加して `terraform apply`
+   （デプロイ手順 1 のポリシー参照）。OIDC プロバイダはアカウントに 1 つしか
+   作れないので、他の用途で作成済みなら `create_github_oidc_provider = false`
+   にして既存を参照します。
+2. ロールの ARN を取り出す:
+
+   ```bash
+   terraform output -raw github_actions_deploy_role_arn
+   # arn:aws:iam::317695556802:role/webapp-dev-github-actions-deploy
+   ```
+
+3. app リポジトリの **Settings → Secrets and variables → Actions → Variables** に
+   `AWS_DEPLOY_ROLE_ARN` という名前で登録する（Secrets ではなく Variables）。
+   この変数が空のうちは `deploy` ジョブはスキップされるので、手順 1〜2 が
+   終わるまで main に push しても CI は落ちません。
+
+デプロイを許可する対象を変えたい場合は `github_deploy_repository` /
+`github_deploy_branches` を変更して apply してください。ブランチを足すと、
+そのブランチの workflow もロールを引き受けられるようになります。
+
+**手で流したいとき**（ロールバックや、CI を通さずに入れ替えたいとき）:
 
 ```bash
 aws ecs update-service --force-new-deployment \
   --cluster "$(terraform output -raw ecs_cluster_name)" \
   --service "$(terraform output -raw ecs_service_name)"
 ```
+
+`:latest` は動くタグなので、`update-service` を叩いた時点の `latest` が入ります。
+特定のコミットに戻したいときは、`container_image` に
+`ghcr.io/prtimes-hackathon-2026/app:sha-<commit>`（`docker-publish.yml` が常に
+発行しています）を指定して `terraform apply` してください。
+
+### 運用
 
 ログを見る:
 

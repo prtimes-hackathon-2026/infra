@@ -236,3 +236,29 @@ variable "allow_self_credential_management" {
   type        = bool
   default     = true
 }
+
+# ---------------------------------------------------------------------------
+# GitHub Actions からの自動デプロイ
+# ---------------------------------------------------------------------------
+
+variable "github_deploy_repository" {
+  description = "デプロイを許可する GitHub リポジトリ (owner/repo)"
+  type        = string
+  default     = "prtimes-hackathon-2026/app"
+}
+
+variable "github_deploy_branches" {
+  description = "デプロイを許可するブランチ。ここに挙げたブランチの workflow だけがロールを引き受けられる"
+  type        = list(string)
+  default     = ["main"]
+}
+
+variable "create_github_oidc_provider" {
+  description = <<-EOT
+    GitHub Actions 用の OIDC プロバイダを Terraform で作るか。
+    アカウントに既にある場合 (他のリポジトリ用に作成済みなど) は false にする。
+    その場合は既存のプロバイダを参照するだけで、作成も削除もしない。
+  EOT
+  type        = bool
+  default     = true
+}
