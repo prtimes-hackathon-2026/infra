@@ -619,6 +619,15 @@ aws ecs execute-command --interactive --command /bin/sh \
 合計で月 $90〜100 程度です。使い終わったら `terraform destroy` で消えます
 （アプリ用 RDS は `skip_final_snapshot = true` なのでスナップショットは残りません）。
 
+## PR プレビュー環境
+
+app リポジトリの PR ごとに `https://pr-<番号>.preview.<ドメイン>` を生やす構成を
+検討しています。**設計のみで、まだ実装されていません。** 共有 ALB に相乗りして
+PR ごとに ECS サービスとリスナールールだけを作り、DB はプレビュー用 RDS の中に
+PR ごとの database を切る方針です。
+
+詳細は [docs/pr-preview.md](docs/pr-preview.md) を参照してください。
+
 ## 補足
 
 - state は Terraform Cloud が保持します。`*.tfstate` はリポジトリに入りません（`.gitignore` 済み）。
