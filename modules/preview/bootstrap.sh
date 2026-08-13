@@ -41,6 +41,16 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'role')
 SELECT format('ALTER ROLE %I LOGIN PASSWORD %L', :'role', :'password')
 \gexec
 
+-- PostgreSQL 16 以降、CREATEROLE ユーザーが作ったロールへの自己付与に SET は
+-- 含まれない (createrole_self_grant の既定が空)。一方 CREATE DATABASE ... OWNER は
+-- 対象ロールへ SET ROLE できることを要求するので、明示的に付け直す。RDS の
+-- マスターユーザーは superuser ではないため、この付与を省くと弾かれる。
+--
+-- 付与済みのロールに対しても option を更新するだけなので、既に SET 無しで
+-- 作られてしまったロールもこれで直る。
+SELECT format('GRANT %I TO CURRENT_USER WITH SET TRUE', :'role')
+\gexec
+
 -- database: 所有者を PR のロールにする
 SELECT format('CREATE DATABASE %I OWNER %I', :'dbname', :'role')
 WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'dbname')
