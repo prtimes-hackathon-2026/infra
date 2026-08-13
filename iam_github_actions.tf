@@ -65,9 +65,10 @@ data "aws_iam_policy_document" "github_actions_assume" {
   }
 }
 
+# description は ASCII / Latin-1 しか受け付けないので英語で書く（日本語は ValidationError）。
 resource "aws_iam_role" "github_actions_deploy" {
   name               = "${local.name}-github-actions-deploy"
-  description        = "GitHub Actions が ECS サービスを強制デプロイするためのロール"
+  description        = "Force a new deployment of the ${local.name} ECS service from GitHub Actions"
   assume_role_policy = data.aws_iam_policy_document.github_actions_assume.json
 }
 
