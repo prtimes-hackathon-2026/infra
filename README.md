@@ -18,7 +18,6 @@ AWS を Terraform Cloud (HCP Terraform) で管理するための構成です。
 | `iam_ecs.tf` | ECS のタスク実行ロールとタスクロール |
 | `rds.tf` | アプリ用 PostgreSQL、既存の統計 DB の参照、シークレット |
 | `outputs.tf` | アカウント情報、アプリの URL、DB エンドポイント、認証情報 |
-| `policies/terraform-run-role-app.json` | run ロールに追加が必要な IAM ポリシー |
 
 ## セットアップ
 
@@ -281,18 +280,145 @@ Terraform で追加しています（`aws_vpc_security_group_ingress_rule.stats_
 
 現在の run ロール `terraform-policy` は **IAM ユーザーの操作しか許可されていません**。
 このままでは VPC / ECS / RDS / ELB の作成が全て `AccessDenied` になります。
-`policies/terraform-run-role-app.json` を **インラインポリシーとして追加**してください
+下記を `terraform-app-policy` という名前の**インラインポリシーとして追加**してください
 （既存の `terraform-policyPolicy` は残す）。
 
-```bash
-aws iam put-role-policy \
-  --role-name terraform-policy \
-  --policy-name terraform-app-policy \
-  --policy-document file://policies/terraform-run-role-app.json
+run ロール自身の権限は Terraform では管理できません（自分の権限を自分で足せない）。
+管理者権限のあるプリンシパルか IAM コンソールから行ってください。
+
+<details>
+<summary>追加するポリシー (JSON)</summary>
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "NetworkingRead",
+      "Effect": "Allow",
+      "Action": ["ec2:Describe*", "elasticloadbalancing:Describe*"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NetworkingWrite",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateSubnet",
+        "ec2:DeleteSubnet",
+        "ec2:ModifySubnetAttribute",
+        "ec2:CreateRouteTable",
+        "ec2:DeleteRouteTable",
+        "ec2:CreateRoute",
+        "ec2:DeleteRoute",
+        "ec2:ReplaceRoute",
+        "ec2:AssociateRouteTable",
+        "ec2:DisassociateRouteTable",
+        "ec2:CreateSecurityGroup",
+        "ec2:DeleteSecurityGroup",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ec2:RevokeSecurityGroupEgress",
+        "ec2:ModifySecurityGroupRules",
+        "ec2:UpdateSecurityGroupRuleDescriptionsIngress",
+        "ec2:UpdateSecurityGroupRuleDescriptionsEgress",
+        "ec2:CreateTags",
+        "ec2:DeleteTags"
+      ],
+      "Resource": "*",
+      "Condition": { "StringEquals": { "aws:RequestedRegion": "ap-northeast-1" } }
+    },
+    {
+      "Sid": "LoadBalancerEcsRdsLogs",
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:*",
+        "ecs:*",
+        "rds:*",
+        "logs:*",
+        "application-autoscaling:*"
+      ],
+      "Resource": "*",
+      "Condition": { "StringEquals": { "aws:RequestedRegion": "ap-northeast-1" } }
+    },
+    {
+      "Sid": "ManageEcsRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:ListRoleTags",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:PutRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:ListInstanceProfilesForRole",
+        "iam:UpdateAssumeRolePolicy"
+      ],
+      "Resource": ["arn:aws:iam::317695556802:role/webapp-*"]
+    },
+    {
+      "Sid": "PassRolesToEcs",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::317695556802:role/webapp-*",
+      "Condition": {
+        "StringEquals": { "iam:PassedToService": "ecs-tasks.amazonaws.com" }
+      }
+    },
+    {
+      "Sid": "ServiceLinkedRoles",
+      "Effect": "Allow",
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "iam:AWSServiceName": [
+            "ecs.amazonaws.com",
+            "elasticloadbalancing.amazonaws.com",
+            "rds.amazonaws.com"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "ManageSecrets",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:DeleteSecret",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:UpdateSecret",
+        "secretsmanager:GetResourcePolicy",
+        "secretsmanager:ListSecretVersionIds",
+        "secretsmanager:TagResource",
+        "secretsmanager:UntagResource"
+      ],
+      "Resource": [
+        "arn:aws:secretsmanager:ap-northeast-1:317695556802:secret:webapp-*",
+        "arn:aws:secretsmanager:ap-northeast-1:317695556802:secret:rds!*"
+      ]
+    },
+    {
+      "Sid": "KmsForEncryptedResources",
+      "Effect": "Allow",
+      "Action": ["kms:DescribeKey", "kms:ListAliases"],
+      "Resource": "*"
+    }
+  ]
+}
 ```
 
-参照専用ユーザーでは実行できないので、管理者権限のあるプリンシパルか
-IAM コンソールから行ってください。
+</details>
+
+`elasticloadbalancing` / `ecs` / `rds` / `logs` はサービス単位のワイルドカードに
+しています（リージョンだけ制限）。扱うリソースが固まったら絞り込んでください。
 
 **2. Terraform Cloud に変数を設定する**
 
