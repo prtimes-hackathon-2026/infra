@@ -213,16 +213,28 @@ locals {
 
       # 管理者 URL は渡さない。PR のコードが受け取るのは自分の database に
       # しか権限が無い pr_<番号> ロールの URL だけ。
-      secrets = [
-        {
-          name      = "APP_DATABASE_URL"
-          valueFrom = aws_secretsmanager_secret.app_db_url.arn
-        },
-        {
-          name      = "STATS_DATABASE_URL"
-          valueFrom = var.stats_db_secret_arn
-        },
-      ]
+      #
+      # OPENAI_API_KEY は共有基盤のシークレットをそのまま使う。共有基盤が
+      # 古くて output がまだ無い場合は null で渡ってくるので、その時は
+      # 環境変数ごと落とす (アプリ側では任意の変数)。
+      secrets = concat(
+        [
+          {
+            name      = "APP_DATABASE_URL"
+            valueFrom = aws_secretsmanager_secret.app_db_url.arn
+          },
+          {
+            name      = "STATS_DATABASE_URL"
+            valueFrom = var.stats_db_secret_arn
+          },
+        ],
+        var.openai_api_key_secret_arn == null ? [] : [
+          {
+            name      = "OPENAI_API_KEY"
+            valueFrom = var.openai_api_key_secret_arn
+          },
+        ],
+      )
 
       logConfiguration = {
         logDriver = "awslogs"
