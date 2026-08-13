@@ -53,6 +53,11 @@ data "aws_iam_policy_document" "task_execution_secrets" {
       # タスクロールに足すと、PR のコードから AWS API で管理者 URL を取り直せて
       # しまい、database をロールで分けている意味が無くなる。
       var.preview_enabled ? ["arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${local.preview_name}/*"] : [],
+
+      # サンドボックスのメンテナンス用タスクに複製 DB の接続 URL を渡すため。
+      # こちらもタスク実行ロール側に足す (タスクロールには許可しない)。
+      # sandbox_enabled = false なら splat が空リストを返すので何も足さない。
+      aws_secretsmanager_secret.sandbox_db_url[*].arn,
     )
   }
 

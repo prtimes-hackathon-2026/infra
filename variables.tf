@@ -292,6 +292,86 @@ variable "allow_self_credential_management" {
   default     = true
 }
 
+variable "ecs_exec_user_name" {
+  description = <<-EOT
+    参照 + ECS Exec 用の IAM ユーザーの名前。ReadOnlyAccess に加えて、
+    サンドボックスのメンテナンス用タスクへの ecs:ExecuteCommand を持つ。
+    create_access_key / create_login_profile / allow_self_credential_management は
+    readonly ユーザーと共通で、このユーザーにも同じように効く。
+  EOT
+  type        = string
+  default     = "ecs-exec"
+}
+
+# ---------------------------------------------------------------------------
+# サンドボックス (統計 DB の複製 + メンテナンス用タスク)
+# ---------------------------------------------------------------------------
+
+variable "sandbox_enabled" {
+  description = <<-EOT
+    統計 DB の複製と、それを触るメンテナンス用タスクを作るか。
+    false にすると RDS も ECS サービスも消えて課金が止まる
+    (ecs_exec ユーザー自体は残るが、入れる先が無くなる)。
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "sandbox_snapshot_version" {
+  description = <<-EOT
+    複製元スナップショットの世代。この値を上げるとスナップショットを取り直し、
+    複製インスタンスも最新データで作り直される (= 数分のダウンタイム)。
+    スナップショット取得は運営の統計 DB に対する操作になるので、
+    利用の少ない時間帯に回すこと。
+  EOT
+  type        = number
+  default     = 1
+}
+
+variable "sandbox_db_instance_class" {
+  description = "複製 DB のインスタンスクラス。既定は統計 DB と同じ"
+  type        = string
+  default     = "db.t4g.small"
+}
+
+variable "sandbox_db_name" {
+  description = <<-EOT
+    複製 DB に接続するときの初期データベース名。統計 DB には初期データベース名が
+    設定されていないため、実際のデータが入った DB 名が別にある場合はそれを指定する
+    (分からなければ postgres のまま繋いで \l で一覧できる)。
+  EOT
+  type        = string
+  default     = "postgres"
+}
+
+variable "sandbox_maintenance_image" {
+  description = <<-EOT
+    メンテナンス用タスクのイメージ。psql が入っていればよいので上流の
+    postgres 公式イメージを使う (Docker Hub のレート制限を避けて ECR Public)。
+    alpine タグは使わないこと。ECS Exec が注入する SSM エージェントが
+    glibc リンクで、musl の alpine では exec に失敗する。
+  EOT
+  type        = string
+  default     = "public.ecr.aws/docker/library/postgres:17"
+}
+
+variable "sandbox_maintenance_desired_count" {
+  description = "メンテナンス用タスクの常駐数。0 にすると DB を残したままタスクだけ止められる"
+  type        = number
+  default     = 1
+}
+
+variable "sandbox_capacity_provider" {
+  description = "メンテナンス用タスクの起動タイプ。Spot は中断されると exec のセッションが切れる"
+  type        = string
+  default     = "FARGATE_SPOT"
+
+  validation {
+    condition     = contains(["FARGATE", "FARGATE_SPOT"], var.sandbox_capacity_provider)
+    error_message = "sandbox_capacity_provider は FARGATE または FARGATE_SPOT を指定してください。"
+  }
+}
+
 # ---------------------------------------------------------------------------
 # GitHub Actions からの自動デプロイ
 # ---------------------------------------------------------------------------

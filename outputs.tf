@@ -211,6 +211,71 @@ output "readonly_secret_access_key" {
 }
 
 # ---------------------------------------------------------------------------
+# IAM (参照 + ECS Exec ユーザー)
+# ---------------------------------------------------------------------------
+
+output "ecs_exec_user_arn" {
+  description = "参照 + ECS Exec 用 IAM ユーザーの ARN"
+  value       = aws_iam_user.ecs_exec.arn
+}
+
+output "ecs_exec_console_password" {
+  description = "ECS Exec ユーザーの初期コンソールパスワード。terraform output -raw で取り出す (login_profile_pgp_key を指定した場合は空)"
+  value       = try(aws_iam_user_login_profile.ecs_exec[0].password, null)
+  sensitive   = true
+}
+
+output "ecs_exec_console_password_encrypted" {
+  description = "PGP 公開鍵で暗号化された初期コンソールパスワード (login_profile_pgp_key を指定したときのみ)"
+  value       = try(aws_iam_user_login_profile.ecs_exec[0].encrypted_password, null)
+}
+
+output "ecs_exec_access_key_id" {
+  description = "ECS Exec ユーザーのアクセスキー ID (var.create_access_key = true のとき)"
+  value       = try(aws_iam_access_key.ecs_exec[0].id, null)
+}
+
+output "ecs_exec_secret_access_key" {
+  description = "ECS Exec ユーザーのシークレットアクセスキー。terraform output -raw で取り出す"
+  value       = try(aws_iam_access_key.ecs_exec[0].secret, null)
+  sensitive   = true
+}
+
+# ---------------------------------------------------------------------------
+# サンドボックス (統計 DB の複製)
+# ---------------------------------------------------------------------------
+
+output "sandbox_cluster_name" {
+  description = "サンドボックスの ECS クラスター名。exec の --cluster に渡す"
+  value       = one(aws_ecs_cluster.sandbox[*].name)
+}
+
+output "sandbox_service_name" {
+  description = "メンテナンス用タスクの ECS サービス名"
+  value       = one(aws_ecs_service.sandbox_maintenance[*].name)
+}
+
+output "sandbox_db_endpoint" {
+  description = "複製した統計 DB のエンドポイント (host:port)"
+  value       = one(aws_db_instance.sandbox[*].endpoint)
+}
+
+output "sandbox_db_secret_arn" {
+  description = "複製した統計 DB の接続 URL が入った Secrets Manager シークレット"
+  value       = one(aws_secretsmanager_secret.sandbox_db_url[*].arn)
+}
+
+output "sandbox_snapshot_identifier" {
+  description = "複製元のスナップショット。sandbox_snapshot_version を上げると取り直される"
+  value       = one(aws_db_snapshot.stats[*].db_snapshot_identifier)
+}
+
+output "sandbox_log_group_name" {
+  description = "メンテナンス用タスクの CloudWatch Logs グループ"
+  value       = one(aws_cloudwatch_log_group.sandbox[*].name)
+}
+
+# ---------------------------------------------------------------------------
 # IAM (GitHub Actions)
 # ---------------------------------------------------------------------------
 

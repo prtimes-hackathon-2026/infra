@@ -11,6 +11,7 @@ AWS を Terraform Cloud (HCP Terraform) で管理するための構成です。
 | `variables.tf` | `aws_region` / `environment` |
 | `main.tf` | 疎通確認用の data source と共通の locals |
 | `iam_readonly.tf` | 参照専用 IAM ユーザー、コンソールログイン、アクセスキー |
+| `iam_ecs_exec.tf` | 参照 + ECS Exec 用 IAM ユーザー（サンドボックス限定） |
 | `network.tf` | 既存 VPC の参照、アプリ用パブリックサブネットとルーティング |
 | `security_groups.tf` | ALB / ECS タスク / RDS の SG、既存の統計 DB への穴あけ |
 | `alb.tf` | ALB、ターゲットグループ、リスナー |
@@ -20,6 +21,8 @@ AWS を Terraform Cloud (HCP Terraform) で管理するための構成です。
 | `rds.tf` | アプリ用 PostgreSQL、既存の統計 DB の参照、シークレット |
 | `dns.tf` | プレビュー用ドメインの Route 53 ホストゾーンと ACM 証明書 |
 | `rds_preview.tf` | PR プレビュー用 PostgreSQL と管理者シークレット |
+| `rds_sandbox.tf` | 統計 DB の複製（スナップショット + 復元インスタンス） |
+| `ecs_sandbox.tf` | 複製を触るためのメンテナンス用クラスターとタスク |
 | `modules/preview/` | PR 1 つ分のプレビュー環境を作るモジュール |
 | `preview/` | `aws-preview` ワークスペースのルート（Working Directory に指定する） |
 | `outputs.tf` | アカウント情報、アプリの URL、DB エンドポイント、認証情報 |
@@ -209,6 +212,126 @@ Terraform 側に作らせたい場合は `create_access_key = true` にすると
 シークレットは **state に平文で保存される**点に注意してください（state は
 Terraform Cloud 側にあり、ワークスペースの閲覧権限を持つ人は
 `terraform output` 経由で取り出せます）。
+
+## サンドボックス (統計 DB の複製 + ECS Exec)
+
+統計 DB を調査したり試しに書き込んだりするための環境です。**本番の DB は触らせず、
+複製だけを触らせる**ことを目的にしています。
+
+| リソース | 名前 | 中身 |
+| --- | --- | --- |
+| スナップショット | `webapp-sandbox-stats-v1` | 運営の統計 DB から取得 |
+| RDS | `webapp-sandbox-db` | 上のスナップショットから復元。マスターパスワードは Terraform が張り替え |
+| ECS クラスター | `webapp-sandbox` | 本番 (`webapp-dev`) とは別クラスター |
+| ECS サービス | `webapp-sandbox` | `psql` 入りのコンテナを 1 本常駐。ECS Exec で入る |
+| IAM ユーザー | `ecs-exec` | `ReadOnlyAccess` + サンドボックスへの `ecs:ExecuteCommand` |
+
+踏み台の EC2 も Session Manager の設定も要りません。ECS Exec は中身が
+Session Manager と同じで、コンテナ側のエージェントは ECS が注入します。
+
+### 使い方
+
+```bash
+# 1. 常駐しているタスクの ID を取る
+CLUSTER=$(terraform output -raw sandbox_cluster_name)
+TASK=$(aws ecs list-tasks --cluster "$CLUSTER" --query 'taskArns[0]' --output text)
+
+# 2. 入る (ローカルに session-manager-plugin が必要)
+aws ecs execute-command --interactive --command /bin/bash \
+  --cluster "$CLUSTER" --task "$TASK"
+
+# 3. コンテナの中で
+psql "$PGURL"
+```
+
+`PGHOST` / `PGPORT` / `PGUSER` / `PGDATABASE` / `PGSSLMODE` は環境変数に入っている
+ので、`pg_dump` などもそのまま使えます（パスワードだけは `PGURL` の中にあります）。
+
+統計 DB には初期データベース名が設定されていないため、既定では `postgres` に繋ぎます。
+データの入った DB 名が別にある場合は `\l` で確認し、`sandbox_db_name` に設定してください。
+
+### 触れる範囲をどう絞っているか
+
+`ecs-exec` ユーザーに許可した `ecs:ExecuteCommand` のリソースは
+`arn:aws:ecs:...:task/webapp-sandbox/*` だけです。タスク ID は起動のたびに変わるので、
+「サンドボックスのタスクだけ」を正確に表現するために**クラスターを本番と分けて**います。
+本番クラスター `webapp-dev` のタスク（プレビューを含む）には入れません。
+
+ネットワーク側も二重に閉じています。
+
+| 経路 | 可否 | 理由 |
+| --- | --- | --- |
+| メンテナンスタスク → 複製 DB | ○ | `webapp-sandbox-db` の SG が専用 SG からの 5432 を許可 |
+| メンテナンスタスク → アプリ用 DB | × | `webapp-dev-db` の SG は ECS タスク SG と pgAdmin の SG しか許可していない |
+| メンテナンスタスク → 統計 DB 本体 | × | 同上（運営の CFN 側 SG も pgAdmin と ECS タスク SG のみ） |
+| 本番 app コンテナ → 複製 DB | × | 複製 DB の SG に ECS タスク SG を入れていない |
+
+さらに `ReadOnlyAccess` には `secretsmanager:GetSecretValue` が含まれます。
+放っておくと exec を絞っても手元から本番 DB の接続 URL が読めてしまうので、
+本番側のシークレットには**明示的な Deny** を入れてあります（Deny は管理ポリシーの
+Allow に優先します）。
+
+| シークレット | `ecs-exec` から読めるか |
+| --- | --- |
+| `webapp-sandbox/db-url` | ○（複製の資格情報なので可） |
+| `webapp-dev/app-db-url` | × |
+| `webapp-dev/stats-db-url` | × |
+| `webapp-preview/*` | × |
+
+> **複製の中身は本物と同じデータです。** 壊しても本番に波及しないというだけで、
+> 「見せてよい」わけではありません。ユーザーを渡す相手は本番と同じ基準で選んでください。
+
+### データを取り直す
+
+`sandbox_snapshot_version` を上げて apply すると、スナップショットを取り直して
+復元インスタンスを作り直します（複製 DB は数分止まります）。
+
+```hcl
+sandbox_snapshot_version = 2
+```
+
+> **注意**: スナップショットの取得は**運営の統計 DB に対する操作**です。Single-AZ の
+> RDS では取得中に短い I/O 停止が起きるため、初回 apply と取り直しは利用の少ない
+> 時間帯に回してください。
+
+### 主な変数
+
+| 変数 | 既定値 | 説明 |
+| --- | --- | --- |
+| `sandbox_enabled` | `true` | 複製 DB とメンテナンスタスクを作るか。`false` で課金ごと止まる |
+| `sandbox_snapshot_version` | `1` | 上げるとスナップショットを取り直して作り直す |
+| `sandbox_db_instance_class` | `db.t4g.small` | 複製 DB のサイズ。ストレージは元と同じ |
+| `sandbox_db_name` | `postgres` | 複製 DB に繋ぐときの database 名 |
+| `sandbox_maintenance_desired_count` | `1` | `0` にすると DB を残したままタスクだけ止まる |
+| `sandbox_capacity_provider` | `FARGATE_SPOT` | Spot は中断されると exec のセッションが切れる |
+| `sandbox_maintenance_image` | `public.ecr.aws/docker/library/postgres:17` | `psql` が入っていればよい |
+| `ecs_exec_user_name` | `ecs-exec` | IAM ユーザー名 |
+
+`sandbox_maintenance_image` に **alpine タグは使わないでください**。ECS Exec が
+注入する SSM エージェントのバイナリが glibc リンクで、musl の alpine では
+exec に失敗します（`postgres:17` は Debian ベースなので問題ありません）。
+
+### `ecs-exec` ユーザーの資格情報
+
+`readonly` と同じ運用です。`create_access_key` / `create_login_profile` /
+`allow_self_credential_management` は**両方のユーザーに共通で効きます**。
+コンソールのパスワードは管理者が手動で発行してください（「コンソールへのサインイン」
+の手順と同じ）。
+
+`aws login` 用に `SignInLocalDevelopmentAccess` もアタッチしてあるので、長期の
+アクセスキーを配らずに CLI から exec できます。
+
+### 費用
+
+| リソース | 概算 (月額) |
+| --- | --- |
+| RDS `db.t4g.small` | $25 前後 |
+| gp3 ストレージ | 元の統計 DB と同じ容量ぶん |
+| Fargate Spot (0.25 vCPU / 0.5GB 常時) | $3〜5 |
+
+使わない間は `sandbox_maintenance_desired_count = 0` でタスクだけ止められます。
+RDS も含めて止めるなら `sandbox_enabled = false` です（複製は消えるので、
+次に有効化したときは取り直しになります）。
 
 ## ウェブアプリケーション (ECS Fargate + ALB + RDS)
 
@@ -518,6 +641,48 @@ run ロール自身の権限は Terraform では管理できません（自分�
 `elasticloadbalancing` / `ecs` / `rds` / `logs` はサービス単位のワイルドカードに
 しています（リージョンだけ制限）。扱うリソースが固まったら絞り込んでください。
 
+#### `ecs-exec` ユーザーの作成で `AccessDenied` になる場合
+
+`readonly` ユーザーを作れている以上、run ロールには IAM ユーザー系の権限が
+（このインラインポリシーではなく既存の `terraform-policyPolicy` 側に）あるはずですが、
+**リソースが `user/readonly` に絞られていると新しいユーザーは作れません**。
+その場合は既存ポリシーの Resource を広げるか、下記を追加してください。
+
+```json
+{
+  "Sid": "ManageIamUsers",
+  "Effect": "Allow",
+  "Action": [
+    "iam:CreateUser",
+    "iam:DeleteUser",
+    "iam:GetUser",
+    "iam:TagUser",
+    "iam:UntagUser",
+    "iam:ListUserTags",
+    "iam:AttachUserPolicy",
+    "iam:DetachUserPolicy",
+    "iam:ListAttachedUserPolicies",
+    "iam:PutUserPolicy",
+    "iam:GetUserPolicy",
+    "iam:DeleteUserPolicy",
+    "iam:ListUserPolicies",
+    "iam:ListAccessKeys",
+    "iam:ListGroupsForUser",
+    "iam:ListSigningCertificates",
+    "iam:ListSSHPublicKeys",
+    "iam:ListServiceSpecificCredentials",
+    "iam:ListMFADevices"
+  ],
+  "Resource": [
+    "arn:aws:iam::317695556802:user/readonly",
+    "arn:aws:iam::317695556802:user/ecs-exec"
+  ]
+}
+```
+
+`List*` 系が並んでいるのは `force_destroy = true` のためです。destroy 時に
+Terraform が付随する資格情報を数えに行くので、無いと削除が失敗します。
+
 `ManageGithubOidcProvider` は自動デプロイ（後述）用の OIDC プロバイダを Terraform で
 作るためのものです。`ListOpenIDConnectProviderTags` は refresh のたびに呼ばれる
 （`default_tags` を付けているため）ので、無いと apply ではなく plan の時点で
@@ -682,6 +847,9 @@ PR プレビューを有効にすると、これに加えて RDS db.t4g.micro + 
 Route 53 ホストゾーンが月 $0.50 かかります（常時）。PR ごとの Fargate は Spot で
 1 つあたり 1 日 $0.11 前後です。プレビュー用 RDS が要らない間は
 `preview_enabled = false` で止められます。
+
+サンドボックス（既定で有効）は RDS db.t4g.small が月 $25 前後 + 統計 DB と同じ容量の
+gp3、メンテナンスタスクが Spot で月 $3〜5 です。`sandbox_enabled = false` で止まります。
 
 ## PR プレビュー環境
 
