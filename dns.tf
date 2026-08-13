@@ -9,10 +9,13 @@
 # aws_acm_certificate_validation は既定で 75 分待ってから失敗する。そのため
 # 「検証を待つかどうか」を preview_domain_delegated で切り替える。
 #
-#   1 回目の apply: ゾーンと検証用レコードだけ作る
+#   1 回目の apply: preview_domain_delegated = false でゾーンと検証用レコードだけ作る
 #                   → output preview_zone_name_servers を親ゾーンに NS で登録
 #   2 回目の apply: preview_domain_delegated = true にする
 #                   → 証明書が検証され、HTTPS リスナーが立つ
+#
+# 委任は済んでいるので既定は true。ゾーンを作り直して NS が変わったときだけ、
+# 登録し直すまで一時的に false に戻す。
 # ---------------------------------------------------------------------------
 
 locals {

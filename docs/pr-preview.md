@@ -84,11 +84,13 @@ ALB・ECS クラスター・RDS インスタンス・サブネット・SG は**�
 
 | | `preview_domain_delegated` | 作られるもの |
 | --- | --- | --- |
-| 1 回目 | `false`（既定） | ゾーン、証明書、検証用レコード。検証は待たない |
-| 2 回目 | `true` | 証明書の検証完了、HTTPS リスナー |
+| 1 回目 | `false` | ゾーン、証明書、検証用レコード。検証は待たない |
+| 2 回目 | `true`（既定） | 証明書の検証完了、HTTPS リスナー |
 
 1 回目の apply 後に `terraform output preview_zone_name_servers` を親ゾーンへ NS
-レコードとして登録し、それから `true` にしてください。
+レコードとして登録し、それから `true` にしてください。委任は済んでいるので既定は
+`true` です。ゾーンを作り直して NS が変わったときだけ、登録し直すまで一時的に
+`false` に戻します。
 
 | レコード | 向き先 | 用途 |
 | --- | --- | --- |
@@ -456,9 +458,12 @@ run ロールの IAM、TFC ワークスペースの作成、app リポジトリ�
 
 ### 2. ドメインを生やす（`aws` ワークスペース）
 
+既に委任済みなら `terraform apply` 1 回で終わります（`preview_domain_delegated` の
+既定が `true`）。ゾーンを作り直して NS が変わった場合だけ、以下の 2 段階を踏みます。
+
 ```bash
 # 1 回目: ゾーンと検証用レコードを作る。証明書の検証は待たない
-terraform apply
+terraform apply -var preview_domain_delegated=false
 terraform output preview_zone_name_servers
 ```
 
@@ -467,12 +472,13 @@ terraform output preview_zone_name_servers
 preview-prtimes-hackathon-2026.naohanpen.dev` が返るようになったら:
 
 ```bash
-# 2 回目: 証明書を検証して HTTPS リスナーを立てる
-terraform apply -var preview_domain_delegated=true
+# 2 回目: 証明書を検証して HTTPS リスナーを立てる（既定値に戻すだけ）
+terraform apply
 ```
 
-`preview_domain_delegated = true` は変数の既定値ではないので、ワークスペースの
-Variables に入れておいてください。ここまでで既存の dev アプリも HTTPS になります
+`preview_domain_delegated` は既定が `true` なので、ワークスペースの Variables に
+入れる必要はありません（`aws-preview` ワークスペースはこの変数を持たないので、
+入れると「宣言されていない変数」の警告が出ます）。ここまでで既存の dev アプリも HTTPS になります
 （`.dev` は HSTS preload されていて、そもそも HTTP では到達できません）。
 
 プレビュー用 RDS は `preview_enabled`（既定 `true`）で作られます。作りたくない間は

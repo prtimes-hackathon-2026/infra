@@ -321,7 +321,7 @@ state に入れたくない場合は、Terraform 1.11+ の write-only 引数
 | `github_deploy_branches` | `["main"]` | 自動デプロイを許可するブランチ |
 | `create_github_oidc_provider` | `true` | GitHub 用 OIDC プロバイダを Terraform で作るか |
 | `preview_domain` | `preview-prtimes-hackathon-2026.naohanpen.dev` | PR プレビューのドメイン。`null` で DNS と証明書を作らない |
-| `preview_domain_delegated` | `false` | 親ゾーンへの NS 委任が済んだら `true`。証明書の検証と HTTPS 化が走る |
+| `preview_domain_delegated` | `true` | 親ゾーンへの NS 委任が済んでいるか。`false` の間は証明書の検証を待たず HTTPS も立てない（ゾーンを作り直したときだけ一時的に戻す） |
 | `preview_enabled` | `true` | プレビュー用 RDS と管理者シークレットを作るか |
 | `preview_db_instance_class` | `db.t4g.micro` | プレビュー用 RDS のサイズ |
 

@@ -175,10 +175,11 @@ variable "preview_domain_delegated" {
     親ゾーンから preview_domain への NS 委任が完了しているか。
     false の間は証明書の検証を待たず、HTTPS リスナーも作らない
     (委任前に検証を待つと apply が 75 分ハングしてから失敗するため)。
-    output preview_zone_name_servers を親ゾーンに登録してから true にする。
+    委任は済んでいるので既定は true。ゾーンを作り直して NS が変わったときだけ、
+    output preview_zone_name_servers を親ゾーンに登録し直すまで false に戻す。
   EOT
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "preview_enabled" {
