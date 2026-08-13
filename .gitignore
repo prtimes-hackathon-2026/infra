@@ -1,4 +1,6 @@
 .terraform/
+# provider のバージョンは versions.tf の制約で足りるため、lock ファイルは追跡しない
+.terraform.lock.hcl
 .terraform.lock.hcl.bak
 *.tfstate
 *.tfstate.*

@@ -10,7 +10,7 @@ AWS を Terraform Cloud (HCP Terraform) で管理するための構成です。
 | `providers.tf` | AWS provider。リージョンと `default_tags` |
 | `variables.tf` | `aws_region` / `environment` |
 | `main.tf` | 疎通確認用の data source |
-| `iam_readonly.tf` | 参照専用 IAM ユーザーとアクセスキー |
+| `iam_readonly.tf` | 参照専用 IAM ユーザー、コンソールログイン、アクセスキー |
 | `outputs.tf` | 実際に認証できたアカウント ID・ARN・リージョン、参照専用ユーザーの認証情報 |
 
 ## セットアップ
@@ -70,11 +70,15 @@ terraform plan
 
 ## 参照専用 IAM ユーザー
 
-AWS CLI から読み取り操作をするためのユーザーを `iam_readonly.tf` で作成します。
+AWS CLI とマネジメントコンソールから読み取り操作をするためのユーザーを
+`iam_readonly.tf` で作成します。
 
 | 変数 | 既定値 | 説明 |
 | --- | --- | --- |
 | `readonly_user_name` | `readonly` | ユーザー名 |
+| `create_login_profile` | `true` | マネジメントコンソールへのサインインを許可するか |
+| `login_profile_password_length` | `20` | Terraform が生成する初期パスワードの長さ |
+| `login_profile_pgp_key` | `null` | 初期パスワードを暗号化する PGP 公開鍵 (base64) / `keybase:<user>` |
 | `create_access_key` | `false` | アクセスキーを Terraform で作るか |
 | `allow_self_credential_management` | `true` | 本人による自分のキー / パスワード / MFA の管理を許可するか |
 
@@ -82,6 +86,41 @@ AWS CLI から読み取り操作をするためのユーザーを `iam_readonly.
 `Get*` / `List*` / `Describe*` に加え、S3 のオブジェクト取得や
 Lambda の関数コード取得など**データそのものの読み取りも含みます**。
 一覧・メタデータだけに絞りたい場合は `ViewOnlyAccess` に差し替えてください。
+
+### コンソールへのサインイン
+
+`create_login_profile = true`（既定）でログインプロファイルが作られ、
+マネジメントコンソールにサインインできます。初期パスワードは Terraform が
+生成し、**初回サインイン時に本人が変更する**設定（`password_reset_required`）です。
+
+```bash
+terraform output console_signin_url             # https://<account_id>.signin.aws.amazon.com/console
+terraform output -raw readonly_console_password # 初期パスワード
+```
+
+サインイン画面では次を入力します。
+
+| 項目 | 値 |
+| --- | --- |
+| Account ID (or alias) | `account_id` output の値 |
+| IAM user name | `readonly` |
+| Password | 上で取り出した初期パスワード |
+
+初期パスワードは既定では **state に平文で保存されます**。避けたい場合は
+`login_profile_pgp_key` に PGP 公開鍵（base64）または `keybase:<username>` を
+指定してください。`readonly_console_password` は空になり、暗号化された値が
+`readonly_console_password_encrypted` に入ります。
+
+```bash
+terraform output -raw readonly_console_password_encrypted | base64 -d | gpg -d
+```
+
+本人がパスワードを変更しても Terraform は差分として扱いません
+（`password_reset_required` などを `ignore_changes` に入れてあります）。
+プロファイルを作り直すとパスワードがリセットされる点に注意してください。
+
+コンソールを使わせない場合は `create_login_profile = false` にします。既に
+作成済みのプロファイルは apply 時に削除され、サインインできなくなります。
 
 ### アクセスキーの発行
 
