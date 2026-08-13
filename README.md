@@ -10,7 +10,8 @@ AWS を Terraform Cloud (HCP Terraform) で管理するための構成です。
 | `providers.tf` | AWS provider。リージョンと `default_tags` |
 | `variables.tf` | `aws_region` / `environment` |
 | `main.tf` | 疎通確認用の data source |
-| `outputs.tf` | 実際に認証できたアカウント ID・ARN・リージョン |
+| `iam_readonly.tf` | 参照専用 IAM ユーザーとアクセスキー |
+| `outputs.tf` | 実際に認証できたアカウント ID・ARN・リージョン、参照専用ユーザーの認証情報 |
 
 ## セットアップ
 
@@ -66,6 +67,42 @@ terraform plan
 
 `terraform apply` 後、`account_id` と `caller_arn` が想定どおりのアカウント・ロールを
 指していれば、Terraform Cloud から AWS への経路が通っています。
+
+## 参照専用 IAM ユーザー
+
+AWS CLI から読み取り操作をするためのユーザーを `iam_readonly.tf` で作成します。
+
+| 変数 | 既定値 | 説明 |
+| --- | --- | --- |
+| `readonly_user_name` | `readonly` | ユーザー名 |
+| `create_access_key` | `false` | アクセスキーを Terraform で作るか |
+| `allow_self_credential_management` | `true` | 本人による自分のキー / パスワード / MFA の管理を許可するか |
+
+権限は AWS 管理ポリシー `ReadOnlyAccess` です。ほぼ全サービスの
+`Get*` / `List*` / `Describe*` に加え、S3 のオブジェクト取得や
+Lambda の関数コード取得など**データそのものの読み取りも含みます**。
+一覧・メタデータだけに絞りたい場合は `ViewOnlyAccess` に差し替えてください。
+
+### アクセスキーの発行
+
+既定では Terraform はアクセスキーを作りません（`create_access_key = false`）。
+シークレットを state に残さないためです。キーは利用者本人が発行します。
+
+1. IAM コンソールの **Users → `readonly` → Security credentials → Create access key**
+   でキーを作成する（`allow_self_credential_management = true` により、本人の
+   `iam:CreateAccessKey` が許可されています）
+2. AWS CLI に登録して疎通を確認する
+
+```bash
+aws configure --profile readonly
+aws sts get-caller-identity --profile readonly
+```
+
+Terraform 側に作らせたい場合は `create_access_key = true` にすると
+`readonly_access_key_id` / `readonly_secret_access_key` が output されますが、
+シークレットは **state に平文で保存される**点に注意してください（state は
+Terraform Cloud 側にあり、ワークスペースの閲覧権限を持つ人は
+`terraform output` 経由で取り出せます）。
 
 ## 補足
 
