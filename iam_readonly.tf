@@ -19,6 +19,14 @@ resource "aws_iam_user_policy_attachment" "readonly" {
   policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
 }
 
+# `aws login` (AWS CLI のブラウザ経由サインイン) を使うための権限。
+# signin サービスの OAuth2 トークン発行のみで、リソースへの権限は増えない。
+# 実際に何ができるかは上の ReadOnlyAccess の範囲のまま。
+resource "aws_iam_user_policy_attachment" "signin_local_development" {
+  user       = aws_iam_user.readonly.name
+  policy_arn = "arn:aws:iam::aws:policy/SignInLocalDevelopmentAccess"
+}
+
 # 自分のアクセスキーとパスワードだけは本人が回せるようにしておく。
 # ReadOnlyAccess には書き込みが一切含まれないため、これがないとキーの
 # ローテーションのたびに管理者を経由することになる。

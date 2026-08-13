@@ -87,6 +87,11 @@ AWS CLI とマネジメントコンソールから読み取り操作をするた
 Lambda の関数コード取得など**データそのものの読み取りも含みます**。
 一覧・メタデータだけに絞りたい場合は `ViewOnlyAccess` に差し替えてください。
 
+加えて AWS 管理ポリシー `SignInLocalDevelopmentAccess` をアタッチしています。
+`aws login`（AWS CLI のブラウザ経由サインイン）に必要な
+`signin:AuthorizeOAuth2Access` / `signin:CreateOAuth2Token` だけを許可するもので、
+リソースに対する権限は増えません。実際にできる操作は `ReadOnlyAccess` の範囲のままです。
+
 ### コンソールへのサインイン
 
 コンソールのパスワード（ログインプロファイル）は **Terraform では作りません**
@@ -146,6 +151,20 @@ terraform output -raw readonly_console_password_encrypted | base64 -d | gpg -d
 本人がパスワードを変更しても Terraform は差分として扱いません
 （`password_reset_required` などを `ignore_changes` に入れてあります）。
 プロファイルを作り直すとパスワードがリセットされる点に注意してください。
+
+### AWS CLI からのサインイン (`aws login`)
+
+長期のアクセスキーを持たずに CLI を使う方法です。ブラウザが開いて
+コンソールと同じ資格情報でサインインし、CLI 側には一時的な認証情報が入ります。
+`SignInLocalDevelopmentAccess` をアタッチしてあるのはこのためです。
+
+```bash
+aws login --profile readonly
+aws sts get-caller-identity --profile readonly
+```
+
+コンソールのパスワード（ログインプロファイル）が必要なので、先に
+「コンソールへのサインイン」の手順を済ませてください。
 
 ### アクセスキーの発行
 
