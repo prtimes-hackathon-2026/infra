@@ -43,6 +43,16 @@ data "aws_iam_policy_document" "task_execution_secrets" {
         aws_secretsmanager_secret.stats_db_url.arn,
       ],
       var.registry_credentials_secret_arn == null ? [] : [var.registry_credentials_secret_arn],
+      # PR プレビューのシークレット (管理者 URL と PR ごとの接続 URL) は
+      # aws-preview ワークスペースが作るので、ここでは名前のプレフィックスで
+      # 許可する。Secrets Manager の ARN は末尾に 6 文字のランダムが付くため
+      # 完全一致では指定できない。これが無いとプレビューのタスクは
+      # ResourceInitializationError で起動しない。
+      #
+      # 足す先が「タスク実行ロール」であって「タスクロール」でない点が重要。
+      # タスクロールに足すと、PR のコードから AWS API で管理者 URL を取り直せて
+      # しまい、database をロールで分けている意味が無くなる。
+      var.preview_enabled ? ["arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${local.preview_name}/*"] : [],
     )
   }
 

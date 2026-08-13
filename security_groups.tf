@@ -28,7 +28,7 @@ resource "aws_vpc_security_group_ingress_rule" "alb_http" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "alb_https" {
-  for_each = var.certificate_arn == null ? toset([]) : toset(var.alb_ingress_cidrs)
+  for_each = local.https_enabled ? toset(var.alb_ingress_cidrs) : toset([])
 
   security_group_id = aws_security_group.alb.id
   description       = "HTTPS from ${each.value}"

@@ -18,8 +18,12 @@ output "region" {
 # ---------------------------------------------------------------------------
 
 output "app_url" {
-  description = "アプリケーションの URL (ALB の DNS 名)"
-  value       = "${var.certificate_arn == null ? "http" : "https"}://${aws_lb.app.dns_name}"
+  description = "アプリケーションの URL。preview_domain を設定していればその apex を使う"
+  value = format(
+    "%s://%s",
+    local.https_enabled ? "https" : "http",
+    local.preview_domain_enabled ? var.preview_domain : aws_lb.app.dns_name,
+  )
 }
 
 output "alb_dns_name" {
@@ -74,6 +78,100 @@ output "stats_db_endpoint" {
 output "stats_db_secret_arn" {
   description = "統計用 RDS の接続 URL を入れるシークレット。値は手動で設定する"
   value       = aws_secretsmanager_secret.stats_db_url.arn
+}
+
+# ---------------------------------------------------------------------------
+# PR プレビュー環境
+#
+# ここから下は aws-preview ワークスペースが tfe_outputs で読む値。
+# 消したり名前を変えたりすると向こうの plan が壊れるので注意すること。
+# 共有するには、このワークスペースの Settings → Remote state sharing で
+# aws-preview を許可しておく必要がある。
+# ---------------------------------------------------------------------------
+
+output "preview_domain" {
+  description = "PR プレビューのドメイン。pr-<番号>.<domain> が各 PR の URL になる"
+  value       = var.preview_domain
+}
+
+output "preview_zone_id" {
+  description = "プレビュー用ドメインの Route 53 ホストゾーン ID"
+  value       = one(aws_route53_zone.preview[*].zone_id)
+}
+
+output "preview_zone_name_servers" {
+  description = "親ゾーンに NS レコードとして登録する値。ここを登録するまで証明書は検証されない"
+  value       = try(aws_route53_zone.preview[0].name_servers, null)
+}
+
+output "preview_certificate_arn" {
+  description = "プレビュー用ドメインの ACM 証明書 ARN"
+  value       = one(aws_acm_certificate.preview[*].arn)
+}
+
+output "https_listener_arn" {
+  description = "PR ごとのリスナールールを足す先の HTTPS リスナー"
+  value       = one(aws_lb_listener.https[*].arn)
+}
+
+output "vpc_id" {
+  description = "リソースを作成している VPC"
+  value       = var.vpc_id
+}
+
+output "public_subnet_ids" {
+  description = "ECS タスクを置くパブリックサブネット"
+  value       = [for s in aws_subnet.public : s.id]
+}
+
+output "ecs_tasks_security_group_id" {
+  description = "ECS タスク用 SG。プレビューのタスクもこれを共有する"
+  value       = aws_security_group.ecs_tasks.id
+}
+
+output "ecs_cluster_arn" {
+  description = "ECS クラスターの ARN"
+  value       = aws_ecs_cluster.main.arn
+}
+
+output "task_execution_role_arn" {
+  description = "ECS タスク実行ロール。シークレットの取得とイメージ pull に使う"
+  value       = aws_iam_role.task_execution.arn
+}
+
+output "task_role_arn" {
+  description = "ECS タスクロール。コンテナのコード自身が使う"
+  value       = aws_iam_role.task.arn
+}
+
+output "container_port" {
+  description = "アプリが listen するポート"
+  value       = var.container_port
+}
+
+output "health_check_path" {
+  description = "ALB のヘルスチェックパス"
+  value       = var.health_check_path
+}
+
+output "registry_credentials_secret_arn" {
+  description = "コンテナレジストリの認証情報シークレット (public なら null)"
+  value       = var.registry_credentials_secret_arn
+}
+
+output "preview_db_address" {
+  description = "プレビュー用 RDS のホスト名"
+  value       = one(aws_db_instance.preview[*].address)
+}
+
+output "preview_db_port" {
+  description = "プレビュー用 RDS のポート"
+  value       = one(aws_db_instance.preview[*].port)
+}
+
+output "preview_admin_db_secret_arn" {
+  description = "プレビュー用 RDS の管理者接続 URL。bootstrap コンテナだけが受け取る"
+  value       = one(aws_secretsmanager_secret.preview_admin_db_url[*].arn)
 }
 
 # ---------------------------------------------------------------------------

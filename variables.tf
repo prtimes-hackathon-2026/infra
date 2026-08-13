@@ -138,9 +138,64 @@ variable "alb_ingress_cidrs" {
 }
 
 variable "certificate_arn" {
-  description = "HTTPS を使う場合の ACM 証明書 ARN。null なら HTTP (80) のみ公開する"
+  description = <<-EOT
+    HTTPS に使う ACM 証明書 ARN を外から与える場合に指定する。
+    null のときは preview_domain で取った証明書を使う (両方 null なら HTTP のみ)。
+  EOT
   type        = string
   default     = null
+}
+
+# ---------------------------------------------------------------------------
+# PR プレビュー環境 (詳細は docs/pr-preview.md)
+# ---------------------------------------------------------------------------
+
+variable "preview_domain" {
+  description = <<-EOT
+    PR プレビューに使うドメイン。このゾーンを Route 53 に作り、
+    *.<domain> と <domain> を載せた ACM 証明書を取る。
+    null にすると DNS と証明書を一切作らない。
+  EOT
+  type        = string
+  default     = "preview-prtimes-hackathon-2026.naohanpen.dev"
+}
+
+variable "preview_domain_delegated" {
+  description = <<-EOT
+    親ゾーンから preview_domain への NS 委任が完了しているか。
+    false の間は証明書の検証を待たず、HTTPS リスナーも作らない
+    (委任前に検証を待つと apply が 75 分ハングしてから失敗するため)。
+    output preview_zone_name_servers を親ゾーンに登録してから true にする。
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "preview_enabled" {
+  description = <<-EOT
+    PR プレビュー用の RDS と管理者シークレットを作るか。
+    false にすると aws-preview ワークスペースは動かせない (常時課金も無くなる)。
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "preview_db_instance_class" {
+  description = "プレビュー用 RDS のインスタンスクラス"
+  type        = string
+  default     = "db.t4g.micro"
+}
+
+variable "preview_db_allocated_storage" {
+  description = "プレビュー用 RDS のストレージ (GiB)"
+  type        = number
+  default     = 20
+}
+
+variable "preview_db_username" {
+  description = "プレビュー用 RDS のマスターユーザー名。bootstrap コンテナだけが使う"
+  type        = string
+  default     = "postgres"
 }
 
 # ---------------------------------------------------------------------------
