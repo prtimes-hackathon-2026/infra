@@ -33,14 +33,17 @@ resource "aws_iam_role_policy_attachment" "task_execution" {
 
 data "aws_iam_policy_document" "task_execution_secrets" {
   statement {
-    sid     = "ReadDatabaseSecrets"
+    sid     = "ReadSecrets"
     effect  = "Allow"
     actions = ["secretsmanager:GetSecretValue"]
 
-    resources = [
-      aws_secretsmanager_secret.stats_db_url.arn,
-      aws_db_instance.app.master_user_secret[0].secret_arn,
-    ]
+    resources = concat(
+      [
+        aws_secretsmanager_secret.stats_db_url.arn,
+        aws_db_instance.app.master_user_secret[0].secret_arn,
+      ],
+      var.registry_credentials_secret_arn == null ? [] : [var.registry_credentials_secret_arn],
+    )
   }
 
   # RDS 管理のシークレットは KMS で暗号化されているため、復号も必要。

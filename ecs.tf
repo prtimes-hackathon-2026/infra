@@ -55,7 +55,7 @@ resource "aws_ecs_task_definition" "app" {
   }
 
   container_definitions = jsonencode([
-    {
+    merge({
       name      = var.app_name
       image     = var.container_image
       essential = true
@@ -96,7 +96,13 @@ resource "aws_ecs_task_definition" "app" {
           awslogs-stream-prefix = "app"
         }
       }
-    },
+      },
+      # イメージが private なら pull 用の認証情報を渡す。public なら何も足さない。
+      var.registry_credentials_secret_arn == null ? {} : {
+        repositoryCredentials = {
+          credentialsParameter = var.registry_credentials_secret_arn
+        }
+    }),
   ])
 }
 

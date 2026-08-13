@@ -48,8 +48,19 @@ variable "stats_db_identifier" {
 # ---------------------------------------------------------------------------
 
 variable "container_image" {
-  description = "デプロイするコンテナイメージ (例: ghcr.io/<org>/<repo>:<tag>)"
+  description = "デプロイするコンテナイメージ"
   type        = string
+  default     = "ghcr.io/prtimes-hackathon-2026/app:latest"
+}
+
+variable "registry_credentials_secret_arn" {
+  description = <<-EOT
+    コンテナレジストリが認証を要求する場合に使う Secrets Manager シークレットの ARN。
+    {"username": "<GitHubユーザー名>", "password": "<read:packages 権限の PAT>"} の JSON を入れる。
+    イメージが public なら null のままでよい。
+  EOT
+  type        = string
+  default     = null
 }
 
 variable "container_port" {

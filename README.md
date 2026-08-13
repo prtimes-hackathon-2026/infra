@@ -262,7 +262,8 @@ Terraform で追加しています（`aws_vpc_security_group_ingress_rule.stats_
 
 | 変数 | 既定値 | 説明 |
 | --- | --- | --- |
-| `container_image` | **必須** | 例 `ghcr.io/<org>/<repo>:<tag>` |
+| `container_image` | `ghcr.io/prtimes-hackathon-2026/app:latest` | デプロイするイメージ |
+| `registry_credentials_secret_arn` | `null` | イメージが private の場合に指定（下記） |
 | `container_port` | `8080` | コンテナが listen するポート |
 | `health_check_path` | `/` | ALB のヘルスチェックパス |
 | `task_architecture` | `X86_64` | arm64 イメージなら `ARM64` |
@@ -420,9 +421,30 @@ run ロール自身の権限は Terraform では管理できません（自分�
 `elasticloadbalancing` / `ecs` / `rds` / `logs` はサービス単位のワイルドカードに
 しています（リージョンだけ制限）。扱うリソースが固まったら絞り込んでください。
 
-**2. Terraform Cloud に変数を設定する**
+**2. イメージが匿名で pull できる状態か確認する**
 
-ワークスペースの **Terraform variables** に少なくとも `container_image` を設定します。
+`ghcr.io/prtimes-hackathon-2026/app:latest` を既定値にしていますが、**GHCR に push した
+パッケージは既定で private** です。private のままだと ECS が pull できず、タスクが
+`CannotPullContainerError` で起動に失敗します。
+
+```bash
+# 認証なしで manifest が引ければ public
+curl -s -o /dev/null -w '%{http_code}\n' \
+  "https://ghcr.io/token?scope=repository:prtimes-hackathon-2026/app:pull&service=ghcr.io"
+# 200 なら public / 403 なら private または未 push
+```
+
+`403` の場合は次のどちらかで対処します。
+
+- **public にする（おすすめ）**: GitHub の Packages ページ → `app` →
+  Package settings → Change visibility → Public
+- **PAT を使う**: `read:packages` 権限の PAT を
+  `{"username": "<GitHubユーザー名>", "password": "<PAT>"}` の JSON で
+  Secrets Manager に保存し、その ARN を `registry_credentials_secret_arn` に渡す。
+  タスク実行ロールに読み取り権限が自動で付き、`repositoryCredentials` 経由で使われます。
+
+なお、パッケージを public にすると **リポジトリと同じくイメージの中身も誰でも
+pull できる**ようになります。イメージに認証情報などを焼き込んでいないか確認してください。
 
 **3. apply**
 
@@ -456,7 +478,9 @@ curl -i "$(terraform output -raw app_url)"
 
 ### 運用
 
-新しいイメージをデプロイする（タグを変えずに push した場合）:
+既定のイメージは `:latest` を指しています。タグが変わらないと Terraform には差分が
+出ないため、**新しいイメージを push しても `terraform apply` だけではデプロイされません**。
+強制的に入れ替えます:
 
 ```bash
 aws ecs update-service --force-new-deployment \
