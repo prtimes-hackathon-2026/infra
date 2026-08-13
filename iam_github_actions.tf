@@ -16,11 +16,16 @@ locals {
     : data.aws_iam_openid_connect_provider.github[0].arn
   )
 
-  # OIDC トークンの sub クレームは repo:<owner>/<repo>:ref:refs/heads/<branch>
-  # の形になる。ここに挙げたブランチの実行だけがロールを引き受けられる。
+  # sub クレームは <prefix>:ref:refs/heads/<branch>。ここに挙げたブランチの
+  # 実行だけがロールを引き受けられる。
+  github_subject_prefix = coalesce(
+    var.github_deploy_subject_prefix,
+    "repo:${var.github_deploy_repository}",
+  )
+
   github_deploy_subjects = [
     for b in var.github_deploy_branches :
-    "repo:${var.github_deploy_repository}:ref:refs/heads/${b}"
+    "${local.github_subject_prefix}:ref:refs/heads/${b}"
   ]
 }
 

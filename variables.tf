@@ -247,6 +247,16 @@ variable "github_deploy_repository" {
   default     = "prtimes-hackathon-2026/app"
 }
 
+variable "github_deploy_subject_prefix" {
+  description = <<-EOT
+    OIDC トークンの sub クレームの前半部分。実際の値は
+      gh api /repos/<owner>/<repo>/actions/oidc/customization/sub --jq .sub_claim_prefix
+    で確認できる。null にすると repo:<github_deploy_repository> を使う。
+  EOT
+  type        = string
+  default     = "repo:prtimes-hackathon-2026@316162909/app@1332584890"
+}
+
 variable "github_deploy_branches" {
   description = "デプロイを許可するブランチ。ここに挙げたブランチの workflow だけがロールを引き受けられる"
   type        = list(string)
