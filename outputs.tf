@@ -72,8 +72,19 @@ output "stats_db_endpoint" {
 }
 
 output "stats_db_secret_arn" {
-  description = "統計用 RDS の接続 URL を入れるシークレット。値は手動で設定する"
+  description = "統計用 RDS の接続 URL (STATS_DATABASE_URL) が入った Secrets Manager シークレット。stats_db_name が未設定のあいだは空なので、その場合だけ値を手動で入れる"
   value       = aws_secretsmanager_secret.stats_db_url.arn
+}
+
+output "stats_reader_username" {
+  description = "統計 DB の読み取り専用ロール名。アプリはこのロールで接続する"
+  value       = var.stats_reader_username
+}
+
+output "stats_reader_setup_sql" {
+  description = "統計 DB のマスターユーザーで 1 回実行する、読み取り専用ロール作成用の SQL。terraform output -raw stats_reader_setup_sql で取り出して pgAdmin に貼る"
+  value       = local.stats_reader_setup_sql
+  sensitive   = true
 }
 
 # ---------------------------------------------------------------------------

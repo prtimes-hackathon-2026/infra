@@ -43,6 +43,23 @@ variable "stats_db_identifier" {
   default     = "prtimes-hackathon-2026summer-db"
 }
 
+variable "stats_db_name" {
+  description = <<-EOT
+    統計 DB のデータベース名。統計 DB には初期データベース名が設定されておらず
+    data source からは読めないため、pgAdmin 等で確認して指定する。
+    指定すると Terraform が stats_reader の接続 URL を組み立ててシークレットに
+    入れる。null のままだとシークレットは空のままになり、値は手入力になる。
+  EOT
+  type        = string
+  default     = null
+}
+
+variable "stats_reader_username" {
+  description = "統計 DB に作る読み取り専用ロールの名前。アプリはこのロールで接続する"
+  type        = string
+  default     = "stats_reader"
+}
+
 # ---------------------------------------------------------------------------
 # コンテナ
 # ---------------------------------------------------------------------------

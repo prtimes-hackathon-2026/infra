@@ -113,13 +113,50 @@ resource "aws_secretsmanager_secret_version" "app_db_url" {
   )
 }
 
-# 統計 DB は運営が作ったもので、マスターパスワードが Secrets Manager に
-# 入っていない。空のシークレットだけ Terraform で作り、値（接続 URL）は
-# 手でコンソールに入れる。こうすればパスワードが Git にも state にも載らない。
+# 統計 DB は運営が作ったもので、マスターパスワードは Terraform から知りようがない。
+# そこでアプリ用には読み取り専用ロール (var.stats_reader_username) を別に作り、
+# そのパスワードだけを Terraform で生成する。ECS に渡す接続 URL もこのロールの
+# ものになるので、マスターユーザーの資格情報はどこにも保存しない。
+#
+# ロールの作成そのものは Terraform ではできない。Terraform Cloud から統計 DB へは
+# ネットワークが通っていない（プライベートサブネットにいて、SG は pgAdmin の EC2 と
+# ECS タスクからの 5432 しか許可していない）ため、SQL は人が 1 回流す必要がある。
+# 実行する SQL は sql/stats_reader.sql.tftpl にあり、パスワードを埋めたものを
+# terraform output -raw stats_reader_setup_sql で取り出せる。
+#
+# app_db と同じく **平文が Terraform state に入る** 点に注意（state は Terraform
+# Cloud 側で暗号化・アクセス制御されている）。URL エンコードと SQL のクォートを
+# 不要にするため記号は使わず、長さで強度を確保している。
+resource "random_password" "stats_reader" {
+  length  = 40
+  special = false
+}
+
+locals {
+  # 統計 DB には初期データベース名が設定されていないため、data source の db_name は
+  # 空になる。その場合は var.stats_db_name で補ってもらう。どちらも無いと URL を
+  # 組み立てられないので、シークレットは空のままにして手入力に任せる。
+  stats_db_name = try(coalesce(var.stats_db_name, data.aws_db_instance.stats.db_name), null)
+
+  stats_db_url = local.stats_db_name == null ? null : format(
+    "postgresql://%s:%s@%s:%d/%s",
+    var.stats_reader_username,
+    random_password.stats_reader.result,
+    data.aws_db_instance.stats.address,
+    data.aws_db_instance.stats.port,
+    local.stats_db_name,
+  )
+
+  stats_reader_setup_sql = templatefile("${path.module}/sql/stats_reader.sql.tftpl", {
+    username      = var.stats_reader_username
+    password      = random_password.stats_reader.result
+    db_identifier = var.stats_db_identifier
+  })
+}
 
 resource "aws_secretsmanager_secret" "stats_db_url" {
   name        = "${local.name}/stats-db-url"
-  description = "postgres://USER:PASSWORD@${data.aws_db_instance.stats.address}:${data.aws_db_instance.stats.port}/DBNAME"
+  description = "STATS_DATABASE_URL for ${local.name} (${var.stats_reader_username}@${data.aws_db_instance.stats.address})"
 
   # ハッカソン中に作り直すことを想定して、削除後すぐ同名で作れるようにする。
   recovery_window_in_days = 0
@@ -127,4 +164,13 @@ resource "aws_secretsmanager_secret" "stats_db_url" {
   tags = {
     Name = "${local.name}-stats-db-url"
   }
+}
+
+# データベース名が分かっていれば Terraform が URL を組み立てて入れる。分からない
+# うちは箱だけ作って、値はコンソールから手で入れる（それまでタスクは起動しない）。
+resource "aws_secretsmanager_secret_version" "stats_db_url" {
+  count = local.stats_db_url == null ? 0 : 1
+
+  secret_id     = aws_secretsmanager_secret.stats_db_url.id
+  secret_string = local.stats_db_url
 }

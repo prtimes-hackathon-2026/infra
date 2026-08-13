@@ -18,6 +18,7 @@ AWS を Terraform Cloud (HCP Terraform) で管理するための構成です。
 | `iam_ecs.tf` | ECS のタスク実行ロールとタスクロール |
 | `iam_github_actions.tf` | app リポジトリの Actions が自動デプロイに使う OIDC ロール |
 | `rds.tf` | アプリ用 PostgreSQL、既存の統計 DB の参照、シークレット |
+| `sql/stats_reader.sql.tftpl` | 統計 DB に読み取り専用ロールを作る SQL のテンプレート |
 | `outputs.tf` | アカウント情報、アプリの URL、DB エンドポイント、認証情報 |
 
 ## セットアップ
@@ -242,6 +243,30 @@ Terraform で追加しています（`aws_vpc_security_group_ingress_rule.stats_
 > **注意**: 運営がスタックを更新してこの SG を作り直すと、追加したルールは消えます。
 > アプリから統計 DB に繋がらなくなったら、まず `terraform apply` を実行してください。
 
+### 統計 DB には読み取り専用ロールで繋ぎます
+
+アプリは統計 DB を参照しかしないので、マスターユーザーではなく専用の読み取り専用
+ロール `stats_reader` で接続します。ECS に渡る `STATS_DATABASE_URL` もこのロールの
+ものなので、**マスターユーザーの資格情報はどこにも保存されません**。
+
+権限は次の 3 つだけです（`sql/stats_reader.sql.tftpl`）。
+
+| | 内容 |
+| --- | --- |
+| ロール属性 | `LOGIN` のみ。`SUPERUSER` / `CREATEDB` / `CREATEROLE` / `REPLICATION` / `BYPASSRLS` は無し |
+| 権限 | 対象 DB への `CONNECT`、システム以外の全スキーマへの `USAGE` と `SELECT` |
+| 保険 | `default_transaction_read_only = on`。PostgreSQL 14 以前の `public` スキーマへの `CREATE TABLE` など、GRANT だけでは塞ぎきれない書き込みも弾く |
+
+`ALTER DEFAULT PRIVILEGES` で今後増えるテーブルにも `SELECT` が付きますが、これは
+**SQL を実行したロールが作ったオブジェクトにしか効きません**。運営が別のロールで
+テーブルを足したときは、同じ SQL をもう一度流してください。
+
+ロールの作成は Terraform ではできません。Terraform Cloud から統計 DB へネットワークが
+通っていない（プライベートサブネットにいて、SG は pgAdmin の EC2 と ECS タスクからの
+`5432` しか通していない）ためです。**パスワードは Terraform が生成し、それを埋め込んだ
+SQL を output で受け取って pgAdmin から 1 回流す**、という分担にしています。手順は
+セットアップの「4. 統計 DB の読み取り専用ロールを作る」を見てください。
+
 ### コンテナに渡される接続情報
 
 変数名は app リポジトリの `src/shared/env.ts` の zod スキーマに合わせています。
@@ -249,7 +274,7 @@ Terraform で追加しています（`aws_vpc_security_group_ingress_rule.stats_
 | 種別 | 変数名 | 中身 |
 | --- | --- | --- |
 | シークレット | `APP_DATABASE_URL` | アプリ用 RDS の接続 URL（Terraform が自動生成） |
-| シークレット | `STATS_DATABASE_URL` | 統計 DB の接続 URL（**手動設定が必要**） |
+| シークレット | `STATS_DATABASE_URL` | 統計 DB の接続 URL。`stats_reader` のもので、`stats_db_name` を指定していれば Terraform が自動生成 |
 | 環境変数 | `APP_DATABASE_SSL` / `STATS_DATABASE_SSL` | `require` |
 | 環境変数 | `NODE_ENV` | `production` |
 
@@ -291,6 +316,8 @@ state に入れたくない場合は、Terraform 1.11+ の write-only 引数
 | `certificate_arn` | `null` | 指定すると HTTPS を有効化し、HTTP はリダイレクト |
 | `app_db_instance_class` | `db.t4g.small` | 統計 DB と同じ |
 | `app_db_allocated_storage` | `200` | GiB。統計 DB は 1000 だがアプリ用は小さくしてある |
+| `stats_db_name` | `null` | 統計 DB のデータベース名。指定すると `STATS_DATABASE_URL` が自動生成される |
+| `stats_reader_username` | `stats_reader` | 統計 DB に作る読み取り専用ロール名 |
 | `container_insights` | `disabled` | 課金が増えるため既定は無効 |
 | `github_deploy_repository` | `prtimes-hackathon-2026/app` | 自動デプロイを許可するリポジトリ |
 | `github_deploy_branches` | `["main"]` | 自動デプロイを許可するブランチ |
@@ -499,28 +526,46 @@ terraform plan
 terraform apply
 ```
 
-**4. 統計 DB の接続 URL をシークレットに入れる**
+**4. 統計 DB の読み取り専用ロールを作る**
 
-統計 DB は運営が作ったもので、Terraform 側ではパスワードを知りようがありません。
-シークレットの箱だけ作るので、値は手で入れてください。**値が入っていないと
-`ResourceNotFoundException` でタスクが起動しません。**
+アプリ用 DB の `APP_DATABASE_URL` は Terraform が自動で入れるので手作業は要りませんが、
+統計 DB は運営が作ったもので Terraform からは SQL を流せないため、ここだけ手作業が
+1 回あります。
+
+**4-1. データベース名を確認して変数に入れる**
+
+統計 DB には初期データベース名が設定されておらず、data source からも読めません。
+pgAdmin で実際の DB 名を確認し、Terraform Cloud のワークスペース変数
+`stats_db_name` に設定して `terraform apply` してください（`*.tfvars` は
+`.gitignore` 済みなので、値はワークスペース変数側に置きます）。
+
+これで Terraform が `stats_reader` のパスワードを生成し、接続 URL を組み立てて
+Secrets Manager に入れます。`stats_db_name` が未設定のあいだはシークレットが空のまま
+なので、**`ResourceNotFoundException` でタスクが起動しません。**
+
+**4-2. ロール作成 SQL を pgAdmin で実行する**
+
+生成されたパスワードを埋め込んだ SQL を output から取り出します。
 
 ```bash
-terraform output stats_db_secret_arn
+terraform output -raw stats_reader_setup_sql
 ```
 
-Secrets Manager コンソールでそのシークレットを開き、**プレーンテキスト**で
-接続 URL を保存します。
+pgAdmin の EC2 からマスターユーザーで統計 DB に接続し、**`stats_db_name` で指定した
+データベースに繋いだ状態で**この SQL を貼って実行します。GRANT は接続中のデータベース
+にしか効かないため、接続先を間違えると権限が付きません。
 
-```
-postgresql://postgres:<統計DBのパスワード>@prtimes-hackathon-2026summer-db.cvkmyi86uqk4.ap-northeast-1.rds.amazonaws.com:5432/<dbname>
-```
+SQL の中身は `sql/stats_reader.sql.tftpl` にあります。末尾の確認クエリで
+`rolsuper` などが `false`、読めるテーブル数が 0 件でないことを確かめてください。
 
-統計 DB には初期データベース名が設定されていないため、`<dbname>` は pgAdmin などで
-実際の DB 名を確認してください。アプリからは参照しかしないので、専用の読み取り専用
-ユーザー（`.env.example` の例では `stats_reader`）を作って使うのが望ましいです。
+何度実行しても同じ結果になるので、パスワードをローテーションしたいときは
+`terraform apply -replace=random_password.stats_reader` して新しい output を
+流し直せば追従します（シークレットも同時に更新されるので、ECS サービスの
+再デプロイも忘れずに）。
 
-アプリ用 DB の `APP_DATABASE_URL` は Terraform が自動で入れるので、手作業は要りません。
+> **注意**: 4-1 の apply で URL がシークレットに入る一方、ロールはまだ存在しません。
+> この間タスクは起動はしますが DB 接続に失敗します。apply の直後に 4-2 を実行して
+> ください。
 
 **5. 疎通確認**
 

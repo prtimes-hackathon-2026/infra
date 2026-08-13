@@ -1,0 +1,102 @@
+-- ${username}: 統計 DB (${db_identifier}) を参照するだけの読み取り専用ロール。
+--
+-- これは Terraform のテンプレートです。パスワードを埋め込んだ実行可能な SQL は
+--
+--   terraform output -raw stats_reader_setup_sql
+--
+-- で取り出せます。pgAdmin の EC2 からマスターユーザーで、**統計データが入っている
+-- データベースに接続した状態で**実行してください。GRANT は接続中のデータベースに
+-- しか効かないため、接続先を間違えると権限が付きません。
+--
+-- 何度実行しても同じ結果になるように書いてあります。パスワードをローテーション
+-- したとき (random_password を作り直して apply したとき) も、新しい output を
+-- そのまま流し直せば追従します。
+
+-- ---------------------------------------------------------------------------
+-- 1. ロール本体
+-- ---------------------------------------------------------------------------
+-- LOGIN 以外は明示的に落としておく。パスワードは Terraform が生成したもので、
+-- 記号を含まない (special = false) ためクォートの心配は要らない。
+DO $$
+DECLARE
+  role_name CONSTANT text := '${username}';
+  role_pass CONSTANT text := '${password}';
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
+    EXECUTE format(
+      'ALTER ROLE %I WITH LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',
+      role_name, role_pass
+    );
+  ELSE
+    EXECUTE format(
+      'CREATE ROLE %I WITH LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',
+      role_name, role_pass
+    );
+  END IF;
+
+  -- 保険。権限そのものは 2. で SELECT しか渡していないが、これを入れておくと
+  -- PostgreSQL 14 以前の public スキーマへの CREATE TABLE のような、GRANT では
+  -- 塞ぎきれない書き込みもまとめて弾ける。ロール自身が SET で外せるので、
+  -- あくまで二重の防御であって境界そのものではない。
+  EXECUTE format('ALTER ROLE %I SET default_transaction_read_only = on', role_name);
+END
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 2. 権限 (接続中のデータベースに対して)
+-- ---------------------------------------------------------------------------
+-- 統計 DB のスキーマ構成は運営側の管理で分からないため、システムスキーマ以外を
+-- 全部なめて SELECT だけ付ける。
+DO $$
+DECLARE
+  role_name CONSTANT text := '${username}';
+  target_schema text;
+BEGIN
+  EXECUTE format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), role_name);
+
+  FOR target_schema IN
+    SELECT nspname
+    FROM pg_namespace
+    WHERE nspname NOT LIKE 'pg\_%'
+      AND nspname <> 'information_schema'
+  LOOP
+    EXECUTE format('GRANT USAGE ON SCHEMA %I TO %I', target_schema, role_name);
+    EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA %I TO %I', target_schema, role_name);
+    EXECUTE format('GRANT SELECT ON ALL SEQUENCES IN SCHEMA %I TO %I', target_schema, role_name);
+
+    -- これから作られるテーブルにも SELECT が付くようにする。
+    -- ALTER DEFAULT PRIVILEGES は「どのロールが作ったオブジェクトか」ごとの設定
+    -- なので、この SQL を実行しているロールが作るぶんにしか効かない。運営側が
+    -- 別のロールでテーブルを足した場合は、この SQL をもう一度流すこと。
+    EXECUTE format(
+      'ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT ON TABLES TO %I',
+      target_schema, role_name
+    );
+    EXECUTE format(
+      'ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT ON SEQUENCES TO %I',
+      target_schema, role_name
+    );
+  END LOOP;
+END
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 3. 確認
+-- ---------------------------------------------------------------------------
+-- rolsuper / rolcreatedb / rolcreaterole が false、rolcanlogin が true、
+-- rolconfig に default_transaction_read_only=on が入っていれば期待どおり。
+SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolconfig
+FROM pg_roles
+WHERE rolname = '${username}';
+
+-- 読めるテーブルの数。0 件なら接続先のデータベースを間違えている可能性が高い。
+SELECT table_schema, count(*) AS readable_tables
+FROM information_schema.table_privileges
+WHERE grantee = '${username}'
+  AND privilege_type = 'SELECT'
+GROUP BY table_schema
+ORDER BY table_schema;
+
+-- 仕上げに ${username} 自身で接続して、次のようになることを確認する。
+--   SELECT 1;                 -> 成功する
+--   CREATE TABLE t (i int);   -> ERROR: cannot execute CREATE TABLE in a read-only transaction
