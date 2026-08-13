@@ -314,7 +314,11 @@ run ロール自身の権限は Terraform では管理できません（自分�
     {
       "Sid": "NetworkingRead",
       "Effect": "Allow",
-      "Action": ["ec2:Describe*", "elasticloadbalancing:Describe*"],
+      "Action": [
+        "ec2:Describe*",
+        "ec2:GetSecurityGroupsForVpc",
+        "elasticloadbalancing:Describe*"
+      ],
       "Resource": "*"
     },
     {
