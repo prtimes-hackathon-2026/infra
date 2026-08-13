@@ -18,6 +18,10 @@ AWS を Terraform Cloud (HCP Terraform) で管理するための構成です。
 | `iam_ecs.tf` | ECS のタスク実行ロールとタスクロール |
 | `iam_github_actions.tf` | app リポジトリの Actions が自動デプロイに使う OIDC ロール |
 | `rds.tf` | アプリ用 PostgreSQL、既存の統計 DB の参照、シークレット |
+| `dns.tf` | プレビュー用ドメインの Route 53 ホストゾーンと ACM 証明書 |
+| `rds_preview.tf` | PR プレビュー用 PostgreSQL と管理者シークレット |
+| `modules/preview/` | PR 1 つ分のプレビュー環境を作るモジュール |
+| `preview/` | `aws-preview` ワークスペースのルート（Working Directory に指定する） |
 | `outputs.tf` | アカウント情報、アプリの URL、DB エンドポイント、認証情報 |
 
 ## セットアップ
@@ -63,6 +67,18 @@ IAM 側（OIDC プロバイダとロールの信頼ポリシー）は AWS コン
 
 `sub` は ID (`org-…` / `ws-…`) ではなく**名前**ベースです。
 project 部分は `project:*` としても構いません。
+
+> PR プレビューを使う場合、`aws-preview` ワークスペースの run も同じロールを
+> 引き受けます。上の `sub` は `workspace:aws` に限定しているため、**このままでは
+> 権限をいくら足しても `aws-preview` の run はロールを引き受けられません**。
+> 値を配列にして両方を許可してください。
+>
+> ```json
+> "app.terraform.io:sub": [
+>   "organization:prtimes-hackathon-2026:project:Default Project:workspace:aws:run_phase:*",
+>   "organization:prtimes-hackathon-2026:project:Default Project:workspace:aws-preview:run_phase:*"
+> ]
+> ```
 
 ### 3. 動作確認
 
@@ -288,13 +304,17 @@ state に入れたくない場合は、Terraform 1.11+ の write-only 引数
 | `task_cpu` / `task_memory` | `512` / `1024` | Fargate のサイズ |
 | `desired_count` | `1` | 起動タスク数 |
 | `container_environment` | `{}` | 追加の環境変数 |
-| `certificate_arn` | `null` | 指定すると HTTPS を有効化し、HTTP はリダイレクト |
+| `certificate_arn` | `null` | HTTPS 用の証明書を外から与える場合に指定。既定では `preview_domain` で取ったものを使う |
 | `app_db_instance_class` | `db.t4g.small` | 統計 DB と同じ |
 | `app_db_allocated_storage` | `200` | GiB。統計 DB は 1000 だがアプリ用は小さくしてある |
 | `container_insights` | `disabled` | 課金が増えるため既定は無効 |
 | `github_deploy_repository` | `prtimes-hackathon-2026/app` | 自動デプロイを許可するリポジトリ |
 | `github_deploy_branches` | `["main"]` | 自動デプロイを許可するブランチ |
 | `create_github_oidc_provider` | `true` | GitHub 用 OIDC プロバイダを Terraform で作るか |
+| `preview_domain` | `preview-prtimes-hackathon-2026.naohanpen.dev` | PR プレビューのドメイン。`null` で DNS と証明書を作らない |
+| `preview_domain_delegated` | `false` | 親ゾーンへの NS 委任が済んだら `true`。証明書の検証と HTTPS 化が走る |
+| `preview_enabled` | `true` | プレビュー用 RDS と管理者シークレットを作るか |
+| `preview_db_instance_class` | `db.t4g.micro` | プレビュー用 RDS のサイズ |
 
 ### デプロイ手順
 
@@ -449,10 +469,49 @@ run ロール自身の権限は Terraform では管理できません（自分�
       "Effect": "Allow",
       "Action": ["kms:DescribeKey", "kms:ListAliases"],
       "Resource": "*"
+    },
+    {
+      "Sid": "Acm",
+      "Effect": "Allow",
+      "Action": [
+        "acm:RequestCertificate",
+        "acm:DeleteCertificate",
+        "acm:DescribeCertificate",
+        "acm:ListCertificates",
+        "acm:AddTagsToCertificate",
+        "acm:RemoveTagsFromCertificate",
+        "acm:ListTagsForCertificate"
+      ],
+      "Resource": "*",
+      "Condition": { "StringEquals": { "aws:RequestedRegion": "ap-northeast-1" } }
+    },
+    {
+      "Sid": "Route53",
+      "Effect": "Allow",
+      "Action": [
+        "route53:CreateHostedZone",
+        "route53:DeleteHostedZone",
+        "route53:GetHostedZone",
+        "route53:ListHostedZones",
+        "route53:ListHostedZonesByName",
+        "route53:ChangeResourceRecordSets",
+        "route53:ListResourceRecordSets",
+        "route53:GetChange",
+        "route53:ChangeTagsForResource",
+        "route53:ListTagsForResource"
+      ],
+      "Resource": "*"
     }
   ]
 }
 ```
+
+`Acm` と `Route53` は PR プレビュー用のドメインと証明書のためのものです
+（[docs/pr-preview.md](docs/pr-preview.md)）。`ListTagsForCertificate` /
+`ListTagsForResource` は `default_tags` を付けているせいで refresh のたびに呼ばれるので、
+無いと plan の時点で `AccessDenied` になります（`ListOpenIDConnectProviderTags` と同じ
+理由）。`Route53` に `aws:RequestedRegion` 条件を**付けていない**のは、Route 53 が
+グローバルサービスで API 呼び出しが `us-east-1` として評価されるためです。
 
 </details>
 
@@ -619,15 +678,31 @@ aws ecs execute-command --interactive --command /bin/sh \
 合計で月 $90〜100 程度です。使い終わったら `terraform destroy` で消えます
 （アプリ用 RDS は `skip_final_snapshot = true` なのでスナップショットは残りません）。
 
+PR プレビューを有効にすると、これに加えて RDS db.t4g.micro + gp3 20GiB が月 $15 前後、
+Route 53 ホストゾーンが月 $0.50 かかります（常時）。PR ごとの Fargate は Spot で
+1 つあたり 1 日 $0.11 前後です。プレビュー用 RDS が要らない間は
+`preview_enabled = false` で止められます。
+
 ## PR プレビュー環境
 
 app リポジトリの PR ごとに
-`https://pr-<番号>.preview-prtimes-hackathon-2026.naohanpen.dev` を生やす構成を
-検討しています。**設計のみで、まだ実装されていません。** 共有 ALB に相乗りして
-PR ごとに ECS サービスとリスナールールだけを作り、DB はプレビュー用 RDS の中に
-PR ごとの database を切る方針です。
+`https://pr-<番号>.preview-prtimes-hackathon-2026.naohanpen.dev` が生えます。
+共有 ALB に相乗りして PR ごとに ECS サービスとリスナールールだけを作り、DB は
+プレビュー用 RDS の中に PR ごとの database を切ります。PR を閉じると消えます。
 
-詳細は [docs/pr-preview.md](docs/pr-preview.md) を参照してください。
+このワークスペース (`aws`) が持つのはドメイン・証明書・プレビュー用 RDS までで、
+PR ごとのリソースは `preview/` をルートとする **`aws-preview` ワークスペース**が
+持ちます。app リポジトリの GitHub Actions が変数 `preview_pull_requests` を
+書き換えて run を起こす仕組みです。
+
+有効にするには手作業が要ります（親ゾーンへの NS 委任、run ロールの IAM、
+`aws-preview` ワークスペースの作成、app 側の secret / variable）。
+**手順と設計の背景は [docs/pr-preview.md](docs/pr-preview.md) にまとめてあります。**
+
+```bash
+# PR ごとのリソースだけを見たいとき
+cd preview && terraform init && terraform plan
+```
 
 ## 補足
 
