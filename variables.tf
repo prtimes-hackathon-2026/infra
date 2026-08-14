@@ -43,16 +43,6 @@ variable "stats_db_identifier" {
   default     = "prtimes-hackathon-2026summer-db"
 }
 
-variable "pgadmin_ingress_cidrs" {
-  description = <<-EOT
-    pgAdmin の EC2 に SSH (22) と pgAdmin (80) を許可する追加の CIDR。
-    SG 本体は運営の CloudFormation 管理なので、ここに書いた分だけを
-    Terraform が独立したルールとして足す (社内・ゲスト Wi-Fi は CFN 側で設定済み)。
-  EOT
-  type        = list(string)
-  default     = ["61.21.199.220/32"]
-}
-
 # ---------------------------------------------------------------------------
 # コンテナ
 # ---------------------------------------------------------------------------

@@ -259,14 +259,6 @@ Terraform で追加しています（`aws_vpc_security_group_ingress_rule.stats_
 > **注意**: 運営がスタックを更新してこの SG を作り直すと、追加したルールは消えます。
 > アプリから統計 DB に繋がらなくなったら、まず `terraform apply` を実行してください。
 
-### pgAdmin の EC2 への接続元
-
-pgAdmin の EC2 の SG も CFN 管理で、`22` と `80` を**社内 Wi-Fi とゲスト Wi-Fi の
-グローバル IP からのみ**許可しています。ここに追加したい接続元は
-`pgadmin_ingress_cidrs` に並べると、Terraform が ingress ルールを足します
-（`aws_vpc_security_group_ingress_rule.pgadmin_ssh` / `pgadmin_http`）。統計 DB の SG と
-同じく、運営がスタックを更新すると消えるので、その場合は再度 `terraform apply` します。
-
 ### コンテナに渡される接続情報
 
 変数名は app リポジトリの `src/shared/env.ts` の zod スキーマに合わせています。
@@ -333,7 +325,6 @@ AI コーチングの API だけが OpenAI からのエラーを返します。
 | `app_db_instance_class` | `db.t4g.small` | 統計 DB と同じ |
 | `app_db_allocated_storage` | `200` | GiB。統計 DB は 1000 だがアプリ用は小さくしてある |
 | `container_insights` | `disabled` | 課金が増えるため既定は無効 |
-| `pgadmin_ingress_cidrs` | `["61.21.199.220/32"]` | pgAdmin の EC2 に 22 / 80 を追加で許可する CIDR（下記） |
 | `github_deploy_repository` | `prtimes-hackathon-2026/app` | 自動デプロイを許可するリポジトリ |
 | `github_deploy_branches` | `["main"]` | 自動デプロイを許可するブランチ |
 | `create_github_oidc_provider` | `true` | GitHub 用 OIDC プロバイダを Terraform で作るか |

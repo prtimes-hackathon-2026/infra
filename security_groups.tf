@@ -153,32 +153,3 @@ resource "aws_vpc_security_group_ingress_rule" "stats_db_from_tasks" {
   to_port                      = 5432
   ip_protocol                  = "tcp"
 }
-
-# ---------------------------------------------------------------------------
-# pgAdmin の EC2 への穴あけ
-# ---------------------------------------------------------------------------
-# こちらの SG も CloudFormation 管理なので、統計 DB と同じく本体には触らず
-# 22 / 80 のルールだけを足す。運営がスタックを更新して SG を作り直すと消えるので、
-# 繋がらなくなったらまず apply し直すこと。
-
-resource "aws_vpc_security_group_ingress_rule" "pgadmin_ssh" {
-  for_each = toset(var.pgadmin_ingress_cidrs)
-
-  security_group_id = data.aws_security_group.pgadmin.id
-  description       = "SSH from ${each.value}"
-  cidr_ipv4         = each.value
-  from_port         = 22
-  to_port           = 22
-  ip_protocol       = "tcp"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "pgadmin_http" {
-  for_each = toset(var.pgadmin_ingress_cidrs)
-
-  security_group_id = data.aws_security_group.pgadmin.id
-  description       = "pgAdmin from ${each.value}"
-  cidr_ipv4         = each.value
-  from_port         = 80
-  to_port           = 80
-  ip_protocol       = "tcp"
-}
