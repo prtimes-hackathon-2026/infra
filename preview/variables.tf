@@ -55,6 +55,17 @@ variable "image_repository" {
   default     = "ghcr.io/prtimes-hackathon-2026/app"
 }
 
+variable "openai_api_key_enabled" {
+  description = <<-EOT
+    プレビューの app コンテナに共有基盤の OPENAI_API_KEY を渡すか。
+    渡すと PR のコードがそのキーを読めるので、外部からの PR も
+    プレビューする運用に変えるときは false にする
+    (AI コーチングの API だけが動かなくなる)。
+  EOT
+  type        = bool
+  default     = true
+}
+
 # ---------------------------------------------------------------------------
 # サイズと寿命
 # ---------------------------------------------------------------------------

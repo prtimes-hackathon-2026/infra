@@ -119,9 +119,15 @@ apex を含めておくのは、`certificate_arn` を設定すると HTTP が HT
 | `aws_lb_target_group` | `webapp-pr-123` | `deregistration_delay = 15`。ヘルスチェックは共有側と同じ `/api/health` |
 | `aws_lb_listener_rule` | — | 上記のホストヘッダ条件 |
 | `aws_cloudwatch_log_group` | `/ecs/webapp-preview/pr-123` | 保持 3 日 |
-| `aws_secretsmanager_secret` | `webapp-preview/pr-123/app-db-url` | PR 専用ロールでの接続 URL。PR のコードに渡すのはこれだけ |
+| `aws_secretsmanager_secret` | `webapp-preview/pr-123/app-db-url` | PR 専用ロールでの接続 URL。DB の資格情報として渡すのはこれだけ |
 | `aws_ecs_task_definition` | `webapp-pr-123` | 256 CPU / 512 MiB。`bootstrap` + `app` の 2 コンテナ |
 | `aws_ecs_service` | `webapp-pr-123` | `desired_count = 1`、`FARGATE_SPOT` |
+
+DB 以外では、統計 DB の接続 URL と `OPENAI_API_KEY` を共有基盤のシークレットから
+そのまま渡しています。`OPENAI_API_KEY` は **PR のコードが読める**ので、外部からの PR も
+プレビューする運用に変えるときは `aws-preview` ワークスペースの
+`openai_api_key_enabled` を `false` にしてください（AI コーチングの API だけが
+動かなくなります）。
 
 SG・サブネット・タスクロール・実行ロールは共有基盤のものをそのまま使います。
 ECS タスク用 SG (`webapp-dev-ecs-tasks`) を再利用するので、**プレビュー環境も統計 DB に

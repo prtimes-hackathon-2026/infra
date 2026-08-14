@@ -108,6 +108,12 @@ variable "stats_db_secret_arn" {
   nullable    = false
 }
 
+variable "openai_api_key_secret_arn" {
+  description = "OPENAI_API_KEY のシークレット。共有基盤のものを使う。null なら app コンテナに渡さない"
+  type        = string
+  default     = null
+}
+
 # ---------------------------------------------------------------------------
 # プレビュー用 DB
 # ---------------------------------------------------------------------------

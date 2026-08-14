@@ -41,6 +41,7 @@ data "aws_iam_policy_document" "task_execution_secrets" {
       [
         aws_secretsmanager_secret.app_db_url.arn,
         aws_secretsmanager_secret.stats_db_url.arn,
+        aws_secretsmanager_secret.openai_api_key.arn,
       ],
       var.registry_credentials_secret_arn == null ? [] : [var.registry_credentials_secret_arn],
       # PR プレビューのシークレット (管理者 URL と PR ごとの接続 URL) は

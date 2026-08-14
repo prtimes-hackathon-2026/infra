@@ -79,6 +79,10 @@ resource "aws_ecs_task_definition" "app" {
           name      = "STATS_DATABASE_URL"
           valueFrom = aws_secretsmanager_secret.stats_db_url.arn
         },
+        {
+          name      = "OPENAI_API_KEY"
+          valueFrom = aws_secretsmanager_secret.openai_api_key.arn
+        },
       ]
 
       logConfiguration = {
@@ -130,5 +134,11 @@ resource "aws_ecs_service" "app" {
     rollback = true
   }
 
-  depends_on = [aws_lb_listener.http]
+  # シークレットを取りに行くのはタスク実行ロールなので、読み取り権限が付く前に
+  # 新しいタスク定義でデプロイが走ると ResourceInitializationError になる。
+  # シークレットを足したときのために順序を固定しておく。
+  depends_on = [
+    aws_lb_listener.http,
+    aws_iam_role_policy.task_execution_secrets,
+  ]
 }

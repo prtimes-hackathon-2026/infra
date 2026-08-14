@@ -18,6 +18,7 @@ AWS を Terraform Cloud (HCP Terraform) で管理するための構成です。
 | `iam_ecs.tf` | ECS のタスク実行ロールとタスクロール |
 | `iam_github_actions.tf` | app リポジトリの Actions が自動デプロイに使う OIDC ロール |
 | `rds.tf` | アプリ用 PostgreSQL、既存の統計 DB の参照、シークレット |
+| `openai.tf` | `OPENAI_API_KEY` を入れるシークレット |
 | `dns.tf` | プレビュー用ドメインの Route 53 ホストゾーンと ACM 証明書 |
 | `rds_preview.tf` | PR プレビュー用 PostgreSQL と管理者シークレット |
 | `modules/preview/` | PR 1 つ分のプレビュー環境を作るモジュール |
@@ -274,6 +275,7 @@ pgAdmin の EC2 の SG も CFN 管理で、`22` と `80` を**社内 Wi-Fi と�
 | --- | --- | --- |
 | シークレット | `APP_DATABASE_URL` | アプリ用 RDS の接続 URL（Terraform が自動生成） |
 | シークレット | `STATS_DATABASE_URL` | 統計 DB の接続 URL（**手動設定が必要**） |
+| シークレット | `OPENAI_API_KEY` | PR羅針盤の AI コーチングが使う OpenAI の API キー（**手動設定が必要**） |
 | 環境変数 | `APP_DATABASE_SSL` / `STATS_DATABASE_SSL` | `require` |
 | 環境変数 | `NODE_ENV` | `production` |
 
@@ -299,6 +301,21 @@ state に入れたくない場合は、Terraform 1.11+ の write-only 引数
 （`aws_db_instance.password_wo` / `aws_secretsmanager_secret_version.secret_string_wo`）と
 `ephemeral "random_password"` を組み合わせる方法があります。ローテーション時に
 `*_wo_version` を手で上げる運用になります。
+
+#### OpenAI の API キーは state に入りません
+
+`OPENAI_API_KEY` は Terraform に値を渡さず、`openai.tf` がシークレットの箱と
+**仮の値**（`placeholder-replace-in-console`）だけを作ります。実キーはコンソールか CLI で
+上書きし、Terraform は作成後の値を見ません（`ignore_changes = [secret_string]`）。
+入れ方は[デプロイ手順の 5](#デプロイ手順)を参照してください。
+
+統計 DB のように箱を空のままにしないのは、版が無いシークレットを参照するとタスクが
+`ResourceNotFoundException` で起動しなくなるためです。アプリ側の `OPENAI_API_KEY` は
+任意（`src/shared/env.ts` で `optional`）なので、仮の値のままでもアプリは起動し、
+AI コーチングの API だけが OpenAI からのエラーを返します。
+
+`container_environment` に平文で書いても渡せますが、その場合はキーが Git と state の
+両方に載るので避けてください。
 
 ### 主な変数
 
@@ -590,7 +607,33 @@ postgresql://postgres:<統計DBのパスワード>@prtimes-hackathon-2026summer-
 
 アプリ用 DB の `APP_DATABASE_URL` は Terraform が自動で入れるので、手作業は要りません。
 
-**5. 疎通確認**
+**5. OpenAI の API キーをシークレットに入れる**
+
+PR羅針盤の AI コーチングが使う `OPENAI_API_KEY` も、キーを Git と Terraform state に
+載せないために手で入れます。統計 DB と違って**箱には仮の値が入った状態で作られる**ので、
+入れ替えないままでもタスクは起動します（AI コーチングの API だけが OpenAI から
+エラーを返します）。
+
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id "$(terraform output -raw openai_api_key_secret_arn)" \
+  --secret-string 'sk-...'
+```
+
+コンソールから入れる場合は、シークレットを開いて**プレーンテキスト**でキーだけを
+保存します（JSON でくるまないこと）。Terraform は作成後の値を見ない
+（`ignore_changes`）ので、以降の `apply` で仮の値に巻き戻ることはありません。
+
+ECS は稼働中のタスクにシークレットの更新を反映しないため、入れ替えた後は
+新しいタスクを起動します。
+
+```bash
+aws ecs update-service --force-new-deployment \
+  --cluster "$(terraform output -raw ecs_cluster_name)" \
+  --service "$(terraform output -raw ecs_service_name)"
+```
+
+**6. 疎通確認**
 
 ```bash
 terraform output app_url
