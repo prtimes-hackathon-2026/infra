@@ -123,11 +123,17 @@ apex を含めておくのは、`certificate_arn` を設定すると HTTP が HT
 | `aws_ecs_task_definition` | `webapp-pr-123` | 256 CPU / 512 MiB。`bootstrap` + `app` の 2 コンテナ |
 | `aws_ecs_service` | `webapp-pr-123` | `desired_count = 1`、`FARGATE_SPOT` |
 
-DB 以外では、統計 DB の接続 URL と `OPENAI_API_KEY` を共有基盤のシークレットから
-そのまま渡しています。`OPENAI_API_KEY` は **PR のコードが読める**ので、外部からの PR も
-プレビューする運用に変えるときは `aws-preview` ワークスペースの
+DB 以外では、統計 DB の接続 URL・`OPENAI_API_KEY`・`AUTH_PASSWORD` を共有基盤の
+シークレットからそのまま渡しています。`OPENAI_API_KEY` は **PR のコードが読める**ので、
+外部からの PR もプレビューする運用に変えるときは `aws-preview` ワークスペースの
 `openai_api_key_enabled` を `false` にしてください（AI コーチングの API だけが
 動かなくなります）。
+
+`AUTH_PASSWORD`（簡易ログインの合言葉）を渡しているのは、プレビューもインターネットから
+到達できるためです。渡さないとアプリ側の既定値（`prtimes`）で誰でも入れてしまいます。
+本番と同じ合言葉なので、これも **PR のコードから読めます**。外部からの PR を
+プレビューするなら、プレビュー専用のシークレットを別に作って渡してください
+（`modules/preview` の `auth_password_secret_arn` に別の ARN を渡すだけで済みます）。
 
 SG・サブネット・タスクロール・実行ロールは共有基盤のものをそのまま使います。
 ECS タスク用 SG (`webapp-dev-ecs-tasks`) を再利用するので、**プレビュー環境も統計 DB に

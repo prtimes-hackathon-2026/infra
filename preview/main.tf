@@ -81,6 +81,7 @@ module "preview" {
   registry_credentials_secret_arn = try(local.shared.registry_credentials_secret_arn, null)
   stats_db_secret_arn             = local.shared.stats_db_secret_arn
   openai_api_key_secret_arn       = var.openai_api_key_enabled ? try(local.shared.openai_api_key_secret_arn, null) : null
+  auth_password_secret_arn        = try(local.shared.auth_password_secret_arn, null)
 
   # プレビュー用 DB
   db_address          = try(local.shared.preview_db_address, null)

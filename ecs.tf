@@ -23,17 +23,47 @@ resource "aws_ecs_cluster_capacity_providers" "main" {
 }
 
 locals {
+  # 値を Git にも平文の環境変数にも置きたくないものは Secrets Manager 経由で渡す。
+  # AUTH_PASSWORD を入れているのは、アプリ側の既定値 ('prtimes') のまま公開しない
+  # ため (auth.tf)。
+  app_secrets = [
+    {
+      name      = "APP_DATABASE_URL"
+      valueFrom = aws_secretsmanager_secret.app_db_url.arn
+    },
+    {
+      name      = "STATS_DATABASE_URL"
+      valueFrom = aws_secretsmanager_secret.stats_db_url.arn
+    },
+    {
+      name      = "OPENAI_API_KEY"
+      valueFrom = aws_secretsmanager_secret.openai_api_key.arn
+    },
+    {
+      name      = "AUTH_PASSWORD"
+      valueFrom = aws_secretsmanager_secret.auth_password.arn
+    },
+  ]
+
   # 変数名は app リポジトリの src/shared/env.ts (zod スキーマ) に合わせている。
   # 接続 URL の 2 本は必須。SSL は RDS が rds.force_ssl を既定で有効にしている
   # ため require を明示している (アプリ側の既定値も require)。
-  app_environment = merge(
-    {
-      NODE_ENV           = "production"
-      APP_DATABASE_SSL   = "require"
-      STATS_DATABASE_SSL = "require"
-    },
-    var.container_environment,
-  )
+  #
+  # 同じ名前を environment と secrets の両方に置かない。どちらが勝つかは
+  # 保証されておらず、RegisterTaskDefinition に弾かれることもある。
+  # container_environment に AUTH_PASSWORD などを平文で入れてしまっても
+  # 壊れないよう、シークレット側を優先してここで落とす。
+  app_environment = {
+    for k, v in merge(
+      {
+        NODE_ENV           = "production"
+        APP_DATABASE_SSL   = "require"
+        STATS_DATABASE_SSL = "require"
+      },
+      var.container_environment,
+    ) : k => v
+    if !contains([for s in local.app_secrets : s.name], k)
+  }
 }
 
 resource "aws_ecs_task_definition" "app" {
@@ -70,20 +100,7 @@ resource "aws_ecs_task_definition" "app" {
         }
       ]
 
-      secrets = [
-        {
-          name      = "APP_DATABASE_URL"
-          valueFrom = aws_secretsmanager_secret.app_db_url.arn
-        },
-        {
-          name      = "STATS_DATABASE_URL"
-          valueFrom = aws_secretsmanager_secret.stats_db_url.arn
-        },
-        {
-          name      = "OPENAI_API_KEY"
-          valueFrom = aws_secretsmanager_secret.openai_api_key.arn
-        },
-      ]
+      secrets = local.app_secrets
 
       logConfiguration = {
         logDriver = "awslogs"
