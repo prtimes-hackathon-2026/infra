@@ -2,6 +2,10 @@
 
 AWS を Terraform Cloud (HCP Terraform) で管理するための構成です。
 
+## 構成図
+
+![AWS 構成図](docs/architecture.svg)
+
 ## 構成
 
 | ファイル | 役割 |

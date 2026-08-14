@@ -1,0 +1,237 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1150" width="1500" height="1150" font-family="'Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,'IPAGothic','Helvetica Neue',Arial,sans-serif">
+<defs>
+<marker id="ah" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+  <path d="M0 1 L9 5 L0 9 z" class="head"/>
+</marker>
+<marker id="ahs" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+  <path d="M0 1 L9 5 L0 9 z" class="head"/>
+</marker>
+</defs>
+<style>
+  .bg { fill: #ffffff; }
+  .card { fill: #ffffff; stroke: #d9e0e7; }
+  .t { fill: #16212f; }
+  .tm { fill: #5c6b7a; }
+  .edge { stroke: #7b8794; }
+  .head { fill: #7b8794; }
+  .lbl { fill: #ffffff; fill-opacity: 0.9; }
+  @media (prefers-color-scheme: dark) {
+    .bg { fill: #0d1117; }
+    .card { fill: #171d26; stroke: #303a46; }
+    .t { fill: #e7edf3; }
+    .tm { fill: #9fb0c0; }
+    .edge { stroke: #8b98a6; }
+    .head { fill: #8b98a6; }
+    .lbl { fill: #0d1117; fill-opacity: 0.85; }
+  }
+</style>
+<rect width="1500" height="1150" class="bg"/>
+<text x="40" y="46" class="t" font-size="24" font-weight="700">AWS 構成図 — prtimes-hackathon-2026 / infra</text>
+<rect x="40" y="72" width="1420" height="88" rx="10" fill="#6b7684" fill-opacity="0.045" stroke="#6b7684" stroke-width="1.6" stroke-dasharray="6 5"/>
+<text x="58" y="96" class="tm" font-size="12" font-weight="700">インターネット</text>
+<rect x="180" y="88" width="228" height="60" rx="9" class="card" stroke-width="1.2"/>
+<rect x="181" y="97" width="4" height="42" rx="2" fill="#6b7684"/>
+<rect x="194" y="102" width="32" height="32" rx="7" fill="#6b7684"/>
+<circle cx="210" cy="113.6" r="4.2" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M202 126.2 a8 8 0 0 1 16 0" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="238" y="122.5" class="t" font-size="12.5" font-weight="700">利用者</text>
+<rect x="460" y="88" width="250" height="60" rx="9" class="card" stroke-width="1.2"/>
+<rect x="461" y="97" width="4" height="42" rx="2" fill="#6b7684"/>
+<rect x="474" y="102" width="32" height="32" rx="7" fill="#6b7684"/>
+<circle cx="490" cy="118" r="8.6" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M485.8 116.2 a4.2 4.2 0 0 0 8.4 0" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="518" y="115" class="t" font-size="12.5" font-weight="700">GitHub Container Registry</text>
+<text x="518" y="132" class="tm" font-size="10" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace">ghcr.io/…/app</text>
+<rect x="770" y="88" width="228" height="60" rx="9" class="card" stroke-width="1.2"/>
+<rect x="771" y="97" width="4" height="42" rx="2" fill="#6b7684"/>
+<rect x="784" y="102" width="32" height="32" rx="7" fill="#6b7684"/>
+<path d="M800 109 l2.4 6 l6 2.4 l-6 2.4 l-2.4 6 l-2.4 -6 l-6 -2.4 l6 -2.4 Z" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="828" y="122.5" class="t" font-size="12.5" font-weight="700">OpenAI API</text>
+<rect x="40" y="186" width="1420" height="830" rx="14" fill="#232f3e" fill-opacity="0.045" stroke="#232f3e" stroke-width="1.6"/>
+<rect x="56" y="196" width="84.5" height="28" rx="6" fill="#232f3e"/>
+<text x="69" y="214.5" font-size="12.5" font-weight="700" fill="#ffffff">AWS Cloud</text>
+<rect x="64" y="232" width="1372" height="758" rx="12" fill="#7d8998" fill-opacity="0.045" stroke="#7d8998" stroke-width="1.6" stroke-dasharray="7 6"/>
+<rect x="80" y="242" width="117" height="28" rx="6" fill="#7d8998"/>
+<text x="93" y="260.5" font-size="12.5" font-weight="700" fill="#ffffff">ap-northeast-1</text>
+<rect x="490" y="272" width="228" height="60" rx="9" class="card" stroke-width="1.2"/>
+<rect x="491" y="281" width="4" height="42" rx="2" fill="#8c4fff"/>
+<rect x="504" y="286" width="32" height="32" rx="7" fill="#8c4fff"/>
+<circle cx="520" cy="302" r="8.6" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="520" cy="302" rx="3.7" ry="8.6" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M511.4 302 H528.6" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="548" y="299" class="t" font-size="12.5" font-weight="700">Route 53</text>
+<text x="548" y="316" class="tm" font-size="10" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace">preview-…naohanpen.dev</text>
+<rect x="770" y="272" width="228" height="60" rx="9" class="card" stroke-width="1.2"/>
+<rect x="771" y="281" width="4" height="42" rx="2" fill="#dd344c"/>
+<rect x="784" y="286" width="32" height="32" rx="7" fill="#dd344c"/>
+<rect x="791.6" y="293.4" width="16.8" height="12" rx="1.8" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M795.4 297.4 H804.6" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M795.4 301 H801.4" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M796.6 305.4 l-1.6 6.6 l5 -2.6" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M803.4 305.4 l1.6 6.6 l-5 -2.6" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="828" y="299" class="t" font-size="12.5" font-weight="700">ACM</text>
+<text x="828" y="316" class="tm" font-size="10" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace">*.&lt;zone&gt; + apex</text>
+<rect x="1188" y="380" width="228" height="60" rx="9" class="card" stroke-width="1.2"/>
+<rect x="1189" y="389" width="4" height="42" rx="2" fill="#dd344c"/>
+<rect x="1202" y="394" width="32" height="32" rx="7" fill="#dd344c"/>
+<rect x="1211.2" y="408.6" width="13.6" height="10" rx="2" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1214 408.6 v-3.8 a4 4 0 0 1 8 0 v3.8" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="1246" y="407" class="t" font-size="12.5" font-weight="700">Secrets Manager</text>
+<text x="1246" y="424" class="tm" font-size="10" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace">webapp-dev / webapp-preview</text>
+<rect x="1188" y="458" width="228" height="60" rx="9" class="card" stroke-width="1.2"/>
+<rect x="1189" y="467" width="4" height="42" rx="2" fill="#e7157b"/>
+<rect x="1202" y="472" width="32" height="32" rx="7" fill="#e7157b"/>
+<rect x="1210.6" y="479.4" width="14.8" height="17.2" rx="2" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1213.8 484 H1222.2" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1213.8 488.4 H1222.2" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1213.8 492.8 H1222.2" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="1246" y="485" class="t" font-size="12.5" font-weight="700">CloudWatch Logs</text>
+<text x="1246" y="502" class="tm" font-size="10" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace">/ecs/webapp-dev, /ecs/…/pr-N</text>
+<rect x="1188" y="536" width="228" height="60" rx="9" class="card" stroke-width="1.2"/>
+<rect x="1189" y="545" width="4" height="42" rx="2" fill="#dd344c"/>
+<rect x="1202" y="550" width="32" height="32" rx="7" fill="#dd344c"/>
+<circle cx="1218" cy="561.8" r="3.9" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1210.4 574 a7.6 7.6 0 0 1 15.2 0" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="1246" y="563" class="t" font-size="12.5" font-weight="700">IAM</text>
+<text x="1246" y="580" class="tm" font-size="10" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace">ロール / OIDC プロバイダ</text>
+<rect x="80" y="356" width="1070" height="574" rx="12" fill="#8c4fff" fill-opacity="0.045" stroke="#8c4fff" stroke-width="1.6"/>
+<text x="1134" y="384" class="t" font-size="13" font-weight="700" text-anchor="end">VPC  10.0.0.0/16</text>
+<text x="1134" y="402" class="tm" font-size="10" text-anchor="end" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace">vpc-00a084258f8af45ee</text>
+<rect x="210" y="332" width="210" height="48" rx="9" class="card" stroke-width="1.2"/>
+<rect x="211" y="341" width="4" height="30" rx="2" fill="#8c4fff"/>
+<rect x="224" y="340" width="32" height="32" rx="7" fill="#8c4fff"/>
+<path d="M231.4 351.6 H248.6" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M244.6 348 l3.6 3.6 l-3.6 3.6" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M231.4 360.4 H248.6" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M235.4 356.8 l-3.6 3.6 l3.6 3.6" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="268" y="360.5" class="t" font-size="12" font-weight="700">Internet Gateway</text>
+<rect x="136" y="416" width="495" height="484" rx="10" fill="#147eba" fill-opacity="0.045" stroke="#147eba" stroke-width="1.6" stroke-dasharray="6 5"/>
+<text x="152" y="440" class="t" font-size="11.5" font-weight="700">アベイラビリティゾーン  ap-northeast-1a</text>
+<rect x="643" y="416" width="495" height="484" rx="10" fill="#147eba" fill-opacity="0.045" stroke="#147eba" stroke-width="1.6" stroke-dasharray="6 5"/>
+<text x="659" y="440" class="t" font-size="11.5" font-weight="700">アベイラビリティゾーン  ap-northeast-1c</text>
+<rect x="148" y="452" width="471" height="264" rx="9" fill="#7aa116" fill-opacity="0.045" stroke="#7aa116" stroke-width="1.6"/>
+<text x="164" y="474" class="t" font-size="11" font-weight="700">パブリックサブネット  10.0.1.0/24</text>
+<rect x="655" y="452" width="471" height="264" rx="9" fill="#7aa116" fill-opacity="0.045" stroke="#7aa116" stroke-width="1.6"/>
+<text x="671" y="474" class="t" font-size="11" font-weight="700">パブリックサブネット  10.0.2.0/24</text>
+<rect x="148" y="740" width="471" height="160" rx="9" fill="#00a4a6" fill-opacity="0.045" stroke="#00a4a6" stroke-width="1.6"/>
+<text x="164" y="762" class="t" font-size="11" font-weight="700">プライベートサブネット  10.0.10.0/24</text>
+<rect x="655" y="740" width="471" height="160" rx="9" fill="#00a4a6" fill-opacity="0.045" stroke="#00a4a6" stroke-width="1.6"/>
+<text x="671" y="762" class="t" font-size="11" font-weight="700">プライベートサブネット  10.0.20.0/24</text>
+<rect x="250" y="494" width="780" height="60" rx="9" class="card" stroke-width="1.2"/>
+<rect x="533.5" y="508" width="32" height="32" rx="7" fill="#8c4fff"/>
+<circle cx="542.1" cy="524" r="2.3" fill="#ffffff"/>
+<path d="M544.5 524 H551.5 V517.2" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="556.3" cy="517.2" r="2.3" fill="#ffffff"/>
+<path d="M544.5 524 H551.5 V524" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="556.3" cy="524" r="2.3" fill="#ffffff"/>
+<path d="M544.5 524 H551.5 V530.8" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="556.3" cy="530.8" r="2.3" fill="#ffffff"/>
+<text x="577.5" y="521" class="t" font-size="13" font-weight="700">Application Load Balancer</text>
+<text x="577.5" y="538" class="tm" font-size="10" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace">webapp-dev-alb</text>
+<rect x="190" y="588" width="900" height="116" rx="10" fill="#ed7100" fill-opacity="0.06" stroke="#ed7100" stroke-width="1.4"/>
+<rect x="206" y="596" width="20" height="20" rx="7" fill="#ed7100"/>
+<rect x="211.25" y="601.25" width="4.375" height="4.375" rx="0.875" fill="none" stroke="#ffffff" stroke-width="1.0625" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="216.375" y="601.25" width="4.375" height="4.375" rx="0.875" fill="none" stroke="#ffffff" stroke-width="1.0625" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="211.25" y="606.375" width="4.375" height="4.375" rx="0.875" fill="none" stroke="#ffffff" stroke-width="1.0625" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="216.375" y="606.375" width="4.375" height="4.375" rx="0.875" fill="none" stroke="#ffffff" stroke-width="1.0625" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="232" y="611" class="t" font-size="11.5" font-weight="700">ECS クラスター  webapp-dev</text>
+<rect x="204" y="620" width="400" height="60" rx="9" class="card" stroke-width="1.2"/>
+<rect x="336.5" y="634" width="32" height="32" rx="7" fill="#ed7100"/>
+<rect x="344.9" y="642.4" width="7" height="7" rx="1.4" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="353.1" y="642.4" width="7" height="7" rx="1.4" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="344.9" y="650.6" width="7" height="7" rx="1.4" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="353.1" y="650.6" width="7" height="7" rx="1.4" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="380.5" y="647" class="t" font-size="12.5" font-weight="700">ECS on Fargate</text>
+<text x="380.5" y="664" class="tm" font-size="10" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace">webapp-dev</text>
+<rect x="676" y="620" width="400" height="60" rx="9" class="card" stroke-width="1.2"/>
+<rect x="785.75" y="634" width="32" height="32" rx="7" fill="#ed7100"/>
+<rect x="794.15" y="642.4" width="7" height="7" rx="1.4" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="802.35" y="642.4" width="7" height="7" rx="1.4" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="794.15" y="650.6" width="7" height="7" rx="1.4" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="802.35" y="650.6" width="7" height="7" rx="1.4" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="829.75" y="647" class="t" font-size="12.5" font-weight="700">ECS on Fargate (Spot)</text>
+<text x="829.75" y="664" class="tm" font-size="10" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace">webapp-pr-&lt;番号&gt;</text>
+<rect x="190" y="772" width="900" height="112" rx="10" fill="#3f6dd8" fill-opacity="0.06" stroke="#3f6dd8" stroke-width="1.4"/>
+<rect x="204" y="794" width="280" height="60" rx="9" class="card" stroke-width="1.2"/>
+<rect x="205" y="803" width="4" height="42" rx="2" fill="#3f6dd8"/>
+<rect x="218" y="808" width="32" height="32" rx="7" fill="#3f6dd8"/>
+<ellipse cx="234" cy="818.6" rx="7.4" ry="2.9" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M226.6 818.6 v10.8" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M241.4 818.6 v10.8" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="234" cy="829.4" rx="7.4" ry="2.9" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="262" y="821" class="t" font-size="12.5" font-weight="700">RDS PostgreSQL</text>
+<text x="262" y="838" class="tm" font-size="10" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace">webapp-dev-db</text>
+<rect x="500" y="794" width="280" height="60" rx="9" class="card" stroke-width="1.2"/>
+<rect x="501" y="803" width="4" height="42" rx="2" fill="#3f6dd8"/>
+<rect x="514" y="808" width="32" height="32" rx="7" fill="#3f6dd8"/>
+<ellipse cx="530" cy="818.6" rx="7.4" ry="2.9" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M522.6 818.6 v10.8" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M537.4 818.6 v10.8" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="530" cy="829.4" rx="7.4" ry="2.9" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="558" y="821" class="t" font-size="12.5" font-weight="700">RDS PostgreSQL</text>
+<text x="558" y="838" class="tm" font-size="10" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace">webapp-preview-db</text>
+<rect x="796" y="794" width="280" height="60" rx="9" class="card" stroke-width="1.2"/>
+<rect x="797" y="803" width="4" height="42" rx="2" fill="#3f6dd8"/>
+<rect x="810" y="808" width="32" height="32" rx="7" fill="#3f6dd8"/>
+<ellipse cx="826" cy="818.6" rx="7.4" ry="2.9" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M818.6 818.6 v10.8" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M833.4 818.6 v10.8" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="826" cy="829.4" rx="7.4" ry="2.9" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="854" y="821" class="t" font-size="12.5" font-weight="700">RDS PostgreSQL</text>
+<text x="854" y="838" class="tm" font-size="10" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace">…summer-db (既存)</text>
+<rect x="990" y="1046" width="228" height="60" rx="9" class="card" stroke-width="1.2"/>
+<rect x="991" y="1055" width="4" height="42" rx="2" fill="#6b7684"/>
+<rect x="1004" y="1060" width="32" height="32" rx="7" fill="#6b7684"/>
+<path d="M1011.4 1069.4 l6.2 3.6 v7.2 l-6.2 -3.6 Z" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1019.2 1069.4 l6.2 3.6 v7.2 l-6.2 -3.6 Z" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1027 1073 l6.2 -3.6 v7.2 l-6.2 3.6 Z" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="1048" y="1073" class="t" font-size="12.5" font-weight="700">HCP Terraform</text>
+<text x="1048" y="1090" class="tm" font-size="10" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace">aws / aws-preview</text>
+<rect x="1240" y="1046" width="228" height="60" rx="9" class="card" stroke-width="1.2"/>
+<rect x="1241" y="1055" width="4" height="42" rx="2" fill="#6b7684"/>
+<rect x="1254" y="1060" width="32" height="32" rx="7" fill="#6b7684"/>
+<circle cx="1270" cy="1076" r="8.6" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1265.8 1074.2 a4.2 4.2 0 0 0 8.4 0" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="1298" y="1073" class="t" font-size="12.5" font-weight="700">GitHub Actions</text>
+<text x="1298" y="1090" class="tm" font-size="10" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace">prtimes-hackathon-2026/app</text>
+<polyline points="294,148 294,332" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah)"/>
+<rect x="299" y="281" width="113.74" height="17.5" rx="4" class="lbl"/>
+<text x="304" y="293.5" class="tm" font-size="10.5">HTTPS 443 / HTTP 80</text>
+<polyline points="300,380 300,494" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah)"/>
+<polyline points="380,148 380,212 604,212 604,272" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+<rect x="465" y="197" width="52" height="17.5" rx="4" class="lbl"/>
+<text x="470" y="209.5" class="tm" font-size="10.5">名前解決</text>
+<polyline points="604,332 604,494" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+<rect x="609" y="411" width="37.3" height="17.5" rx="4" class="lbl"/>
+<text x="614" y="423.5" class="tm" font-size="10.5">ALIAS</text>
+<polyline points="884,332 884,494" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+<rect x="889" y="411" width="41.5" height="17.5" rx="4" class="lbl"/>
+<text x="894" y="423.5" class="tm" font-size="10.5">証明書</text>
+<polyline points="190,646 110,646 110,370 210,370" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah)"/>
+<text x="98" y="520" class="tm" font-size="10.5" text-anchor="middle" transform="rotate(-90 98 520)">アウトバウンド</text>
+<polyline points="884,148 884,240 350,240 350,332" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" marker-start="url(#ahs)"/>
+<polyline points="585,148 585,240" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" marker-start="url(#ahs)"/>
+<polyline points="460,554 460,620" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah)"/>
+<rect x="465" y="579" width="37.3" height="17.5" rx="4" class="lbl"/>
+<text x="470" y="591.5" class="tm" font-size="10.5">:3000</text>
+<polyline points="880,554 880,620" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah)"/>
+<rect x="885" y="579" width="37.3" height="17.5" rx="4" class="lbl"/>
+<text x="890" y="591.5" class="tm" font-size="10.5">:3000</text>
+<polyline points="340,680 340,794" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah)"/>
+<rect x="345" y="721" width="31.84" height="17.5" rx="4" class="lbl"/>
+<text x="350" y="733.5" class="tm" font-size="10.5">5432</text>
+<polyline points="740,680 740,794" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah)"/>
+<rect x="745" y="721" width="31.84" height="17.5" rx="4" class="lbl"/>
+<text x="750" y="733.5" class="tm" font-size="10.5">5432</text>
+<polyline points="900,704 900,794" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah)"/>
+<rect x="905" y="721" width="31.84" height="17.5" rx="4" class="lbl"/>
+<text x="910" y="733.5" class="tm" font-size="10.5">5432</text>
+<polyline points="1188,410 1162,410 1162,630 1090,630" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+<polyline points="1090,666 1174,666 1174,488 1188,488" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah)"/>
+<polyline points="1104,1046 1104,962 1250,962 1250,596" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah)"/>
+<rect x="1255" y="791" width="31.84" height="17.5" rx="4" class="lbl"/>
+<text x="1260" y="803.5" class="tm" font-size="10.5">OIDC</text>
+<polyline points="1354,1046 1354,596" fill="none" class="edge" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah)"/>
+<rect x="1359" y="791" width="31.84" height="17.5" rx="4" class="lbl"/>
+<text x="1364" y="803.5" class="tm" font-size="10.5">OIDC</text>
+</svg>
