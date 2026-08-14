@@ -267,7 +267,7 @@ Terraform で追加しています（`aws_vpc_security_group_ingress_rule.stats_
 | --- | --- | --- |
 | シークレット | `APP_DATABASE_URL` | アプリ用 RDS の接続 URL（Terraform が自動生成） |
 | シークレット | `STATS_DATABASE_URL` | 統計 DB の接続 URL（**手動設定が必要**） |
-| シークレット | `OPENAI_API_KEY` | PR羅針盤の AI コーチングが使う OpenAI の API キー（**手動設定が必要**） |
+| シークレット | `OPENAI_API_KEY` | 目的管理の AI コーチングが使う OpenAI の API キー（**手動設定が必要**） |
 | 環境変数 | `APP_DATABASE_SSL` / `STATS_DATABASE_SSL` | `require` |
 | 環境変数 | `NODE_ENV` | `production` |
 
@@ -600,7 +600,7 @@ postgresql://postgres:<統計DBのパスワード>@prtimes-hackathon-2026summer-
 
 **5. OpenAI の API キーをシークレットに入れる**
 
-PR羅針盤の AI コーチングが使う `OPENAI_API_KEY` も、キーを Git と Terraform state に
+目的管理の AI コーチングが使う `OPENAI_API_KEY` も、キーを Git と Terraform state に
 載せないために手で入れます。統計 DB と違って**箱には仮の値が入った状態で作られる**ので、
 入れ替えないままでもタスクは起動します（AI コーチングの API だけが OpenAI から
 エラーを返します）。
