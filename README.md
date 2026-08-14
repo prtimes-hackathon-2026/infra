@@ -19,6 +19,7 @@ AWS を Terraform Cloud (HCP Terraform) で管理するための構成です。
 | `iam_github_actions.tf` | app リポジトリの Actions が自動デプロイに使う OIDC ロール |
 | `rds.tf` | アプリ用 PostgreSQL、既存の統計 DB の参照、シークレット |
 | `openai.tf` | `OPENAI_API_KEY` を入れるシークレット |
+| `auth.tf` | 簡易ログインの合言葉 `AUTH_PASSWORD` を入れるシークレット |
 | `dns.tf` | プレビュー用ドメインの Route 53 ホストゾーンと ACM 証明書 |
 | `rds_preview.tf` | PR プレビュー用 PostgreSQL と管理者シークレット |
 | `modules/preview/` | PR 1 つ分のプレビュー環境を作るモジュール |
@@ -268,6 +269,7 @@ Terraform で追加しています（`aws_vpc_security_group_ingress_rule.stats_
 | シークレット | `APP_DATABASE_URL` | アプリ用 RDS の接続 URL（Terraform が自動生成） |
 | シークレット | `STATS_DATABASE_URL` | 統計 DB の接続 URL（**手動設定が必要**） |
 | シークレット | `OPENAI_API_KEY` | 目的管理の AI コーチングが使う OpenAI の API キー（**手動設定が必要**） |
+| シークレット | `AUTH_PASSWORD` | 簡易ログインの合言葉（Terraform が乱数で初期値を作る） |
 | 環境変数 | `APP_DATABASE_SSL` / `STATS_DATABASE_SSL` | `require` |
 | 環境変数 | `NODE_ENV` | `production` |
 
@@ -308,6 +310,23 @@ AI コーチングの API だけが OpenAI からのエラーを返します。
 
 `container_environment` に平文で書いても渡せますが、その場合はキーが Git と state の
 両方に載るので避けてください。
+
+#### ログインの合言葉はシークレットから渡します
+
+app は利用者アカウントを持たず、共有の合言葉 1 つで入る簡易ログインです。
+`AUTH_PASSWORD` を渡さないと app 側の既定値（`src/shared/env.ts` の `prtimes`）が
+使われ、リポジトリを読める人には合言葉が筒抜けになります。そのため `auth.tf` で
+シークレットを作り、タスク定義の `secrets` で渡しています。
+
+初期値は **Terraform が生成する 24 桁の乱数**です。`OPENAI_API_KEY` のように固定の
+プレースホルダーを置くと、それがそのまま Git に書かれた合言葉になってしまうためで、
+代わりに平文が state に載ります（アプリ用 DB のパスワードと同じ扱い）。
+決めた合言葉に変えるときは[デプロイ手順の 6](#デプロイ手順)を参照してください。
+上書き後の値は Terraform の管理外です（`ignore_changes = [secret_string]`）。
+
+`container_environment` に `AUTH_PASSWORD` を入れても効きません。同じ名前を
+`environment` と `secrets` の両方に置くと衝突するため、`ecs.tf` の `app_environment`
+がシークレットと同名のキーを落とすようにしてあります。
 
 ### 主な変数
 
@@ -624,7 +643,33 @@ aws ecs update-service --force-new-deployment \
   --service "$(terraform output -raw ecs_service_name)"
 ```
 
-**6. 疎通確認**
+**6. ログインの合言葉を確認する（必要なら差し替える）**
+
+`AUTH_PASSWORD` は Terraform が乱数で作るので、`apply` した時点で
+**リポジトリに書かれていない合言葉**になっています。デモの前に現在の値を控えて
+おいてください。
+
+```bash
+aws secretsmanager get-secret-value \
+  --secret-id "$(terraform output -raw auth_password_secret_arn)" \
+  --query SecretString --output text
+```
+
+覚えやすい合言葉に変えたい場合は上書きします。コンソールから入れる場合は
+**プレーンテキスト**で合言葉だけを保存します（JSON でくるまないこと）。
+
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id "$(terraform output -raw auth_password_secret_arn)" \
+  --secret-string '<合言葉>'
+```
+
+シークレットを読むのはタスクの起動時だけなので、`OPENAI_API_KEY` と同じく
+`update-service --force-new-deployment` で新しいタスクに入れ替えるまでは
+古い合言葉のままです。PR プレビューのタスクも同じシークレットを読むので、
+そちらは次にタスクが起動したとき（PR への push など）に反映されます。
+
+**7. 疎通確認**
 
 ```bash
 terraform output app_url

@@ -114,6 +114,12 @@ variable "openai_api_key_secret_arn" {
   default     = null
 }
 
+variable "auth_password_secret_arn" {
+  description = "簡易ログインの合言葉 (AUTH_PASSWORD) のシークレット。共有基盤のものを使う。null なら app コンテナに渡さない (アプリ側の既定値になる)"
+  type        = string
+  default     = null
+}
+
 # ---------------------------------------------------------------------------
 # プレビュー用 DB
 # ---------------------------------------------------------------------------

@@ -89,6 +89,11 @@ output "openai_api_key_secret_arn" {
   value       = aws_secretsmanager_secret.openai_api_key.arn
 }
 
+output "auth_password_secret_arn" {
+  description = "簡易ログインの合言葉 (AUTH_PASSWORD) が入ったシークレット。初期値は Terraform が作る乱数"
+  value       = aws_secretsmanager_secret.auth_password.arn
+}
+
 # ---------------------------------------------------------------------------
 # PR プレビュー環境
 #
